@@ -1,7 +1,8 @@
 import json
 import os
-
+import re
 import requests
+
 from dotenv import load_dotenv
 from groq import Groq
 
@@ -22,17 +23,17 @@ from tools.ai_tools import (
 # CONFIGURATION
 # =========================================================
 
-# Options:
-#   "cloud"  = Groq only
-#   "local"  = local Qwen only
-#   "hybrid" = Groq first, local fallback
+# Modes:
 #
-# Recommended:
+# "cloud"  = cloud models only
+# "local"  = local model only
+# "hybrid" = cloud models, then local fallback
+#
 MODE = "hybrid"
 
 
 # =========================================================
-# CLOUD MODEL
+# CLOUD MODELS
 # =========================================================
 
 load_dotenv()
@@ -42,15 +43,22 @@ GROQ_API_KEY = os.getenv(
 )
 
 if not GROQ_API_KEY:
+
     raise RuntimeError(
         "GROQ_API_KEY is missing from .env"
     )
+
 
 groq_client = Groq(
     api_key=GROQ_API_KEY
 )
 
-CLOUD_MODEL = "qwen/qwen3.6-27b"
+
+# Cheap / fast default model.
+FAST_MODEL = "llama-3.1-8b-instant"
+
+# Stronger model for difficult requests / fallback.
+SMART_MODEL = "qwen/qwen3.6-27b"
 
 
 # =========================================================
@@ -70,11 +78,27 @@ LOCAL_TIMEOUT = 60
 
 
 # =========================================================
-# GENERAL CONFIG
+# TOKEN-SAVING CONFIGURATION
 # =========================================================
 
-MAX_TOOL_ROUNDS = 5
-MAX_HISTORY_MESSAGES = 12
+# Keep this small. Older conversations do not need to be
+# sent on every request.
+MAX_HISTORY_MESSAGES = 6
+
+# Keep memory retrieval small.
+MAX_RELEVANT_MEMORIES = 5
+
+# Maximum tool rounds.
+MAX_TOOL_ROUNDS = 3
+
+# Short normal response budget.
+FAST_MAX_TOKENS = 180
+
+# Slightly larger for the stronger model.
+SMART_MAX_TOKENS = 320
+
+# Local model is kept deliberately small.
+LOCAL_MAX_TOKENS = 180
 
 
 # =========================================================
@@ -85,7 +109,6 @@ SYSTEM_PROMPT = """
 You are ALFRED, a private personal AI assistant.
 
 Personality:
-
 - Calm
 - Intelligent
 - Polite
@@ -115,39 +138,51 @@ Mixed Urdu-English:
 Naturally use Roman Urdu mixed with English.
 
 If speech transcription contains Devanagari but the
-meaning is clearly Urdu, understand it as Urdu and
-reply in Roman Urdu rather than Hindi.
+meaning is clearly Urdu, understand it as Urdu and reply
+in Roman Urdu rather than Hindi.
 
 ==================================================
 TOOLS
 ==================================================
 
-You have approved local tools.
+Use an approved local tool when the user asks for an action
+that tool can actually perform.
 
-Use tools when the user asks you to perform an action
-that a tool can perform.
+Never invent tools.
 
-Available capabilities include:
+Never claim an action succeeded unless the tool result
+indicates success.
 
-- Open approved Windows applications.
-- Spotify playback.
-- YouTube playback.
-- Spotify controls.
-- YouTube controls.
-- Windows master volume.
-- Web search.
-- Webpage reading.
-- File search/listing.
-- Folder creation.
-- Opening approved files/folders.
-- System information.
+==================================================
+MEDIA
+==================================================
 
-Only use approved tools.
+YouTube requests MUST use play_youtube.
 
-Never invent a tool.
+Spotify requests MUST use play_spotify.
 
-Never claim a tool action succeeded unless the tool
-result indicates success.
+Playback control requests MUST use the appropriate
+playback-control tool.
+
+Do not claim that something is playing unless the tool
+actually succeeded.
+
+Do not substitute another service after a tool failure
+unless the user explicitly asks for an alternative.
+
+==================================================
+FILES
+==================================================
+
+When the user asks to find, locate, search for, or open
+a file on the computer, use find_and_open_file.
+
+Do not use open_application for a file request.
+
+Never invent a file path.
+
+Only claim that a file was opened when the file tool
+reported success.
 
 ==================================================
 WEB
@@ -155,96 +190,49 @@ WEB
 
 Use web_search for current or external information.
 
-Use open_webpage when a specific webpage needs to be
-read.
-
-For detailed web research:
-
-1. Search first.
-2. Examine the results.
-3. Open the relevant source when necessary.
-4. Answer using the retrieved information.
+Use open_webpage for reading a specific webpage.
 
 ==================================================
 MEMORY
 ==================================================
 
-Use supplied long-term memory when relevant.
+Use supplied memory when relevant.
 
 Do not invent memories.
 
 ==================================================
-SAFETY
+RESPONSE STYLE
 ==================================================
-
-Do not execute arbitrary shell commands.
-
-Do not invent successful actions.
 
 Keep normal answers concise.
 
-==================================================
-MEDIA COMMAND RULES
-==================================================
+Do not explain internal tool selection.
 
-When the user asks to play, watch, search for, or find
-something on YouTube, ALWAYS use the play_youtube tool.
+Do not mention model routing unless the user asks.
 
-Examples:
-
-"play something from Sidemen"
-"play Formula 1 FP1 highlights"
-"watch the new Grand Prix highlights"
-"find Outdoor Boys on YouTube"
-
-These are YouTube tool requests.
-
-Do NOT respond as if the video is playing unless the
-play_youtube tool was actually called and returned a
-successful result.
-
-If the tool fails, report the failure.
-
-Do not invent that a video was played.
-
-For Spotify:
-
-"play [song] on Spotify"
-"play [artist] on Spotify"
-"listen to [song] on Spotify"
-
-must use play_spotify.
-
-Never claim that Spotify or YouTube is playing unless the
-corresponding tool actually returned a successful result.
+If a tool fails, briefly report the real failure.
 
 ==================================================
-FILE COMMAND RULES
+TOOL RESULT RULES
 ==================================================
 
-When the user asks to find, locate, search for, or open a
-file on the computer, use the find_and_open_file tool.
+Trust actual tool results.
 
-Examples:
+If a tool reports success:
+treat the action as successful.
 
-"Find my resume."
-"Open invoice.pdf."
-"Find project.py."
-"Open the report."
-"Where is my presentation?"
-"Find the latest budget file."
+If a tool reports failure:
+report the failure.
 
-Do not claim a file was found or opened unless the tool
-actually returned a result.
+Never pretend an action happened.
 
-Use the user's filename or identifying words as the search
-query.
+==================================================
+IMPORTANT
+==================================================
 
-Do not invent file paths.
+Do not waste tokens repeating the user's request.
 
-
-
-
+Do not produce long explanations unless requested.
 """
 
 
@@ -253,6 +241,14 @@ Do not invent file paths.
 # =========================================================
 
 messages = []
+
+
+# =========================================================
+# MODEL ROUTER STATE
+# =========================================================
+
+# The model used most recently for normal cloud requests.
+last_cloud_model = FAST_MODEL
 
 
 # =========================================================
@@ -266,16 +262,21 @@ def get_relevant_memories(
 
         memories = search_memories(
             user_input,
-            limit=10,
+            limit=MAX_RELEVANT_MEMORIES,
         )
 
         if memories:
-            return memories
+            return memories[
+                :MAX_RELEVANT_MEMORIES
+            ]
 
         all_memories = get_all_memories()
 
-        if len(all_memories) <= 20:
-            return all_memories
+        if len(all_memories) <= 10:
+
+            return all_memories[
+                :MAX_RELEVANT_MEMORIES
+            ]
 
         return []
 
@@ -288,18 +289,18 @@ def get_relevant_memories(
 # MEMORY EXTRACTION
 # =========================================================
 
-def extract_memories(
+def should_extract_memory(
     user_input: str,
 ):
-    """
-    Only call the model for messages that are likely
-    to contain a persistent personal fact.
-    """
 
-    text = user_input.strip().lower()
+    text = (
+        user_input
+        .strip()
+        .lower()
+    )
 
     if len(text) < 12:
-        return []
+        return False
 
     indicators = (
         "my name is ",
@@ -314,9 +315,22 @@ def extract_memories(
         "my project is ",
         "my goal is ",
         "remember that ",
+        "i own ",
+        "i have ",
     )
 
-    if not text.startswith(indicators):
+    return text.startswith(
+        indicators
+    )
+
+
+def extract_memories(
+    user_input: str,
+):
+
+    if not should_extract_memory(
+        user_input
+    ):
         return []
 
     prompt = f"""
@@ -346,74 +360,52 @@ If nothing should be remembered:
 }}
 """
 
+    request = [
+        {
+            "role": "system",
+            "content": (
+                "Return valid JSON only. "
+                "Be extremely concise."
+            ),
+        },
+        {
+            "role": "user",
+            "content": prompt,
+        },
+    ]
+
     try:
 
-        # Use cloud for memory extraction in hybrid/cloud
-        # because it is faster and more reliable.
-        if MODE in ("cloud", "hybrid"):
+        # Use the cheap model for memory extraction.
+        response = groq_client.chat.completions.create(
+            model=FAST_MODEL,
+            messages=request,
+            temperature=0,
+            max_tokens=120,
+        )
 
-            response = groq_client.chat.completions.create(
-                model=CLOUD_MODEL,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return valid JSON only."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                temperature=0,
-                reasoning_effort="none",
-                reasoning_format="hidden",
-            )
+        content = (
+            response
+            .choices[0]
+            .message
+            .content
+            or ""
+        ).strip()
 
-            content = (
-                response
-                .choices[0]
-                .message
-                .content
-                .strip()
-            )
+        if content.startswith(
+            "```"
+        ):
 
-        else:
-
-            data = local_chat(
-                [
-                    {
-                        "role": "system",
-                        "content": (
-                            "Return valid JSON only."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                temperature=0,
-                max_tokens=180,
-            )
-
-            content = (
-                data["choices"][0]["message"]
-                .get("content", "")
-                .strip()
-            )
-
-        if content.startswith("```"):
-
-            content = content.replace(
-                "```json",
+            content = re.sub(
+                r"^```(?:json)?\s*",
                 "",
+                content,
             )
 
-            content = content.replace(
-                "```",
+            content = re.sub(
+                r"\s*```$",
                 "",
+                content,
             ).strip()
 
         parsed = json.loads(
@@ -427,6 +419,7 @@ If nothing should be remembered:
 
     except Exception:
 
+        # Memory extraction should never break ALFRED.
         return []
 
 
@@ -437,6 +430,7 @@ If nothing should be remembered:
 def remember_from_input(
     user_input: str,
 ):
+
     memories_to_save = extract_memories(
         user_input
     )
@@ -497,6 +491,7 @@ def remember_from_input(
 def build_messages(
     user_input: str,
 ):
+
     relevant_memories = (
         get_relevant_memories(
             user_input
@@ -509,10 +504,15 @@ def build_messages(
 
     system_content = (
         SYSTEM_PROMPT
-        + "\n\n"
-        + "CURRENT RELEVANT MEMORY:\n\n"
-        + memory_text
     )
+
+    if memory_text.strip():
+
+        system_content += (
+            "\n\n"
+            "CURRENT RELEVANT MEMORY:\n"
+            + memory_text
+        )
 
     request_messages = [
         {
@@ -521,6 +521,7 @@ def build_messages(
         }
     ]
 
+    # Only keep a short recent history.
     request_messages.extend(
         messages[
             -MAX_HISTORY_MESSAGES:
@@ -538,6 +539,279 @@ def build_messages(
 
 
 # =========================================================
+# TOOL FILTERING
+# =========================================================
+
+def get_tool_definition(
+    name: str,
+):
+    for definition in TOOL_DEFINITIONS:
+
+        try:
+
+            if (
+                definition[
+                    "function"
+                ][
+                    "name"
+                ]
+                == name
+            ):
+
+                return definition
+
+        except Exception:
+
+            continue
+
+    return None
+
+
+def select_tools_for_request(
+    user_input: str,
+):
+    """
+    Send only relevant tools to the cloud model.
+
+    This is one of the main token-saving mechanisms.
+    """
+
+    text = (
+        user_input
+        .lower()
+        .strip()
+    )
+
+    selected_names = set()
+
+    # -----------------------------------------------------
+    # YouTube
+    # -----------------------------------------------------
+
+    youtube_words = (
+        "youtube",
+        "video",
+        "watch",
+        "fullscreen",
+        "sidemen",
+        "formula 1",
+        "f1",
+    )
+
+    if any(
+        word in text
+        for word in youtube_words
+    ):
+
+        selected_names.update(
+            {
+                "play_youtube",
+                "youtube_control",
+            }
+        )
+
+    # -----------------------------------------------------
+    # Spotify
+    # -----------------------------------------------------
+
+    spotify_words = (
+        "spotify",
+        "song",
+        "track",
+        "music",
+        "album",
+        "artist",
+        "playlist",
+    )
+
+    if any(
+        word in text
+        for word in spotify_words
+    ):
+
+        selected_names.update(
+            {
+                "play_spotify",
+                "spotify_control",
+            }
+        )
+
+    # -----------------------------------------------------
+    # Files
+    # -----------------------------------------------------
+
+    file_words = (
+        "file",
+        "pdf",
+        "document",
+        "resume",
+        "report",
+        "invoice",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+        ".txt",
+        ".py",
+    )
+
+    if any(
+        word in text
+        for word in file_words
+    ):
+
+        selected_names.add(
+            "find_and_open_file"
+        )
+
+    # -----------------------------------------------------
+    # Windows apps
+    # -----------------------------------------------------
+
+    application_words = (
+        "open app",
+        "launch",
+        "start",
+        "open chrome",
+        "open brave",
+        "open notepad",
+        "open calculator",
+        "open vscode",
+    )
+
+    if any(
+        word in text
+        for word in application_words
+    ):
+
+        selected_names.add(
+            "open_application"
+        )
+
+    # -----------------------------------------------------
+    # Volume
+    # -----------------------------------------------------
+
+    volume_words = (
+        "volume",
+        "louder",
+        "quieter",
+        "mute",
+        "unmute",
+    )
+
+    if any(
+        word in text
+        for word in volume_words
+    ):
+
+        selected_names.update(
+            {
+                "pc_volume_up",
+                "pc_volume_down",
+                "pc_volume_mute",
+                "pc_volume_unmute",
+            }
+        )
+
+    # -----------------------------------------------------
+    # Web
+    # -----------------------------------------------------
+
+    web_words = (
+        "search the web",
+        "search online",
+        "latest news",
+        "current",
+        "today",
+        "price",
+        "website",
+        "look up",
+        "find online",
+    )
+
+    if any(
+        word in text
+        for word in web_words
+    ):
+
+        selected_names.update(
+            {
+                "web_search",
+                "open_webpage",
+            }
+        )
+
+    # -----------------------------------------------------
+    # If nothing matched, don't send tools.
+    # -----------------------------------------------------
+
+    if not selected_names:
+
+        return []
+
+    return [
+        definition
+        for definition in TOOL_DEFINITIONS
+        if definition.get(
+            "function",
+            {},
+        ).get(
+            "name"
+        ) in selected_names
+    ]
+
+
+# =========================================================
+# COMPLEXITY ROUTER
+# =========================================================
+
+def should_use_smart_model(
+    user_input: str,
+):
+    """
+    Heuristic router.
+
+    Most ALFRED requests stay on the cheap model.
+    Only clearly complex requests go to Qwen 27B.
+    """
+
+    text = (
+        user_input
+        .lower()
+        .strip()
+    )
+
+    complex_signals = (
+        "explain why",
+        "compare",
+        "analyze",
+        "analyse",
+        "debug",
+        "design",
+        "architect",
+        "write code",
+        "rewrite code",
+        "review code",
+        "plan",
+        "step by step",
+        "deeply",
+        "detailed explanation",
+        "research",
+        "calculate",
+        "derive",
+        "reason",
+        "pros and cons",
+        "tradeoff",
+        "trade-off",
+    )
+
+    return any(
+        signal in text
+        for signal in complex_signals
+    )
+
+
+# =========================================================
 # LOCAL CHAT
 # =========================================================
 
@@ -546,8 +820,9 @@ def local_chat(
     tools=None,
     tool_choice="auto",
     temperature=0.3,
-    max_tokens=180,
+    max_tokens=LOCAL_MAX_TOKENS,
 ):
+
     payload = {
         "model": LOCAL_MODEL,
         "messages": request_messages,
@@ -555,7 +830,8 @@ def local_chat(
         "max_tokens": max_tokens,
     }
 
-    if tools is not None:
+    if tools:
+
         payload["tools"] = tools
         payload["tool_choice"] = tool_choice
 
@@ -575,76 +851,28 @@ def local_chat(
 # =========================================================
 
 def cloud_chat(
+    model,
     request_messages,
     tools=None,
     tool_choice="auto",
-    temperature=0.5,
-    max_tokens=300,
+    temperature=0.3,
+    max_tokens=FAST_MAX_TOKENS,
 ):
+
     kwargs = {
-        "model": CLOUD_MODEL,
+        "model": model,
         "messages": request_messages,
         "temperature": temperature,
-        "reasoning_effort": "none",
-        "reasoning_format": "hidden",
+        "max_tokens": max_tokens,
     }
 
-    if tools is not None:
+    if tools:
+
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
 
-    response = groq_client.chat.completions.create(
+    return groq_client.chat.completions.create(
         **kwargs
-    )
-
-    return response
-
-
-# =========================================================
-# ADD ASSISTANT TOOL CALL MESSAGE
-# =========================================================
-
-def append_assistant_tool_message(
-    request_messages,
-    message,
-    tool_calls,
-):
-    request_messages.append(
-        {
-            "role": "assistant",
-            "content": (
-                message.get("content", "")
-                if isinstance(message, dict)
-                else getattr(
-                    message,
-                    "content",
-                    "",
-                )
-            ) or "",
-            "tool_calls": [
-                {
-                    "id": (
-                        call.get("id")
-                        if isinstance(call, dict)
-                        else call.id
-                    ),
-                    "type": "function",
-                    "function": {
-                        "name": (
-                            call["function"]["name"]
-                            if isinstance(call, dict)
-                            else call.function.name
-                        ),
-                        "arguments": (
-                            call["function"]["arguments"]
-                            if isinstance(call, dict)
-                            else call.function.arguments
-                        ),
-                    },
-                }
-                for call in tool_calls
-            ],
-        }
     )
 
 
@@ -655,13 +883,16 @@ def append_assistant_tool_message(
 def normalise_tool_calls(
     message,
 ):
-    """
-    Convert cloud/local tool calls to one common structure.
-    """
 
     raw_calls = (
-        message.get("tool_calls", [])
-        if isinstance(message, dict)
+        message.get(
+            "tool_calls",
+            [],
+        )
+        if isinstance(
+            message,
+            dict,
+        )
         else getattr(
             message,
             "tool_calls",
@@ -673,7 +904,10 @@ def normalise_tool_calls(
 
     for call in raw_calls:
 
-        if isinstance(call, dict):
+        if isinstance(
+            call,
+            dict,
+        ):
 
             function = call.get(
                 "function",
@@ -682,7 +916,9 @@ def normalise_tool_calls(
 
             calls.append(
                 {
-                    "id": call.get("id"),
+                    "id": call.get(
+                        "id"
+                    ),
                     "name": function.get(
                         "name",
                         "",
@@ -708,6 +944,51 @@ def normalise_tool_calls(
 
 
 # =========================================================
+# TOOL MESSAGE
+# =========================================================
+
+def append_tool_call_message(
+    request_messages,
+    message,
+    tool_calls,
+):
+
+    content = (
+        message.get(
+            "content",
+            "",
+        )
+        if isinstance(
+            message,
+            dict,
+        )
+        else getattr(
+            message,
+            "content",
+            "",
+        )
+    ) or ""
+
+    request_messages.append(
+        {
+            "role": "assistant",
+            "content": content,
+            "tool_calls": [
+                {
+                    "id": call["id"],
+                    "type": "function",
+                    "function": {
+                        "name": call["name"],
+                        "arguments": call["arguments"],
+                    },
+                }
+                for call in tool_calls
+            ],
+        }
+    )
+
+
+# =========================================================
 # ASK BRAIN
 # =========================================================
 
@@ -719,62 +1000,9 @@ def ask_brain(
         user_input
     )
 
-    # =====================================================
-    # HYBRID / CLOUD
-    # =====================================================
-
-    if MODE in (
-        "cloud",
-        "hybrid",
-    ):
-
-        try:
-
-            return run_cloud_brain(
-                user_input,
-                request_messages,
-            )
-
-        except Exception as error:
-
-            print(
-                "[ALFRED CLOUD ERROR]",
-                error,
-            )
-
-            if MODE == "cloud":
-
-                return (
-                    "I couldn't reach my cloud AI "
-                    "service, Sir."
-                )
-
-            print(
-                "[ALFRED] Falling back to local SLM."
-            )
-
-            try:
-
-                return run_local_brain(
-                    user_input,
-                    request_messages,
-                )
-
-            except Exception as local_error:
-
-                print(
-                    "[ALFRED LOCAL ERROR]",
-                    local_error,
-                )
-
-                return (
-                    "I'm having trouble with both "
-                    "my cloud and local AI systems, Sir."
-                )
-
-    # =====================================================
-    # LOCAL ONLY
-    # =====================================================
+    # -----------------------------------------------------
+    # Local-only mode
+    # -----------------------------------------------------
 
     if MODE == "local":
 
@@ -797,9 +1025,63 @@ def ask_brain(
                 "an error, Sir."
             )
 
-    return (
-        "ALFRED's brain mode is configured incorrectly, Sir."
-    )
+    # -----------------------------------------------------
+    # Cloud / hybrid
+    # -----------------------------------------------------
+
+    if MODE not in {
+        "cloud",
+        "hybrid",
+    }:
+
+        return (
+            "ALFRED's brain mode is configured incorrectly, Sir."
+        )
+
+    try:
+
+        return run_cloud_brain(
+            user_input,
+            request_messages,
+        )
+
+    except Exception as error:
+
+        print(
+            "[ALFRED CLOUD ERROR]",
+            error,
+        )
+
+        if MODE == "cloud":
+
+            return (
+                "I couldn't reach my cloud AI "
+                "service, Sir."
+            )
+
+        print(
+            "[ALFRED] Cloud models unavailable. "
+            "Falling back to local SLM."
+        )
+
+        try:
+
+            return run_local_brain(
+                user_input,
+                request_messages,
+            )
+
+        except Exception as local_error:
+
+            print(
+                "[ALFRED LOCAL ERROR]",
+                local_error,
+            )
+
+            return (
+                "I'm having trouble with both "
+                "my cloud and local AI systems, Sir."
+            )
 
 
 # =========================================================
@@ -811,16 +1093,193 @@ def run_cloud_brain(
     request_messages,
 ):
 
+    tools = select_tools_for_request(
+        user_input
+    )
+
+    # -----------------------------------------------------
+    # Decide the first cloud model.
+    # -----------------------------------------------------
+
+    if should_use_smart_model(
+        user_input
+    ):
+
+        primary_model = SMART_MODEL
+
+    else:
+
+        primary_model = FAST_MODEL
+
+    fallback_model = (
+        SMART_MODEL
+        if primary_model == FAST_MODEL
+        else FAST_MODEL
+    )
+
+    global last_cloud_model
+
+    # -----------------------------------------------------
+    # First model
+    # -----------------------------------------------------
+
+    try:
+
+        return run_model(
+            model=primary_model,
+            fallback_model=fallback_model,
+            user_input=user_input,
+            request_messages=request_messages,
+            tools=tools,
+        )
+
+    except Exception as error:
+
+        print(
+            f"[ALFRED] {primary_model} failed:"
+        )
+
+        print(
+            error
+        )
+
+        # Try the other cloud model.
+        try:
+
+            print(
+                f"[ALFRED] Trying {fallback_model}..."
+            )
+
+            result = run_model_once(
+                model=fallback_model,
+                user_input=user_input,
+                request_messages=request_messages,
+                tools=tools,
+            )
+
+            last_cloud_model = fallback_model
+
+            return result
+
+        except Exception as fallback_error:
+
+            print(
+                f"[ALFRED] {fallback_model} failed:"
+            )
+
+            print(
+                fallback_error
+            )
+
+            raise
+
+
+# =========================================================
+# GENERIC CLOUD MODEL RUNNER
+# =========================================================
+
+def run_model(
+    model,
+    fallback_model,
+    user_input,
+    request_messages,
+    tools,
+):
+
+    try:
+
+        result = run_model_once(
+            model=model,
+            user_input=user_input,
+            request_messages=request_messages,
+            tools=tools,
+        )
+
+        global last_cloud_model
+        last_cloud_model = model
+
+        return result
+
+    except Exception as error:
+
+        # We deliberately don't retry every exception.
+        # The fallback is primarily for model/rate-limit
+        # failures.
+
+        if not is_rate_limit_error(
+            error
+        ):
+
+            raise
+
+        print(
+            f"[ALFRED] {model} hit a rate limit."
+        )
+
+        print(
+            f"[ALFRED] Switching to {fallback_model}."
+        )
+
+        result = run_model_once(
+            model=fallback_model,
+            user_input=user_input,
+            request_messages=request_messages,
+            tools=tools,
+        )
+
+        global last_cloud_model
+        last_cloud_model = fallback_model
+
+        return result
+
+
+# =========================================================
+# RATE-LIMIT DETECTION
+# =========================================================
+
+def is_rate_limit_error(
+    error,
+):
+
+    text = str(
+        error
+    ).lower()
+
+    return (
+        "429" in text
+        or "rate limit" in text
+        or "rate_limit_exceeded" in text
+        or "tokens per day" in text
+        or "tokens per minute" in text
+    )
+
+
+# =========================================================
+# RUN ONE CLOUD MODEL
+# =========================================================
+
+def run_model_once(
+    model,
+    user_input,
+    request_messages,
+    tools,
+):
+
     for _ in range(
         MAX_TOOL_ROUNDS
     ):
 
         response = cloud_chat(
-            request_messages,
-            tools=TOOL_DEFINITIONS,
+            model=model,
+            request_messages=request_messages,
+            tools=tools,
             tool_choice="auto",
-            temperature=0.5,
-            max_tokens=300,
+            temperature=0.3,
+            max_tokens=(
+                SMART_MAX_TOKENS
+                if model == SMART_MODEL
+                else FAST_MAX_TOKENS
+            ),
         )
 
         message = response.choices[0].message
@@ -855,43 +1314,35 @@ def run_cloud_brain(
             return answer
 
         # -------------------------------------------------
-        # Build clean assistant tool message
+        # Assistant tool call message
         # -------------------------------------------------
 
-        request_messages.append(
-            {
-                "role": "assistant",
-                "content": (
-                    message.content
-                    or ""
-                ),
-                "tool_calls": [
-                    {
-                        "id": call.id,
-                        "type": "function",
-                        "function": {
-                            "name": call.function.name,
-                            "arguments": call.function.arguments,
-                        },
-                    }
-                    for call in tool_calls
-                ],
-            }
+        normalized_calls = normalise_tool_calls(
+            message
+        )
+
+        append_tool_call_message(
+            request_messages,
+            message,
+            normalized_calls,
         )
 
         # -------------------------------------------------
         # Execute tools
         # -------------------------------------------------
 
-        for call in tool_calls:
+        for call in normalized_calls:
 
-            name = call.function.name
-            raw_arguments = call.function.arguments
+            name = call[
+                "name"
+            ]
 
             try:
 
                 arguments = json.loads(
-                    raw_arguments
+                    call[
+                        "arguments"
+                    ]
                 )
 
             except Exception:
@@ -899,7 +1350,7 @@ def run_cloud_brain(
                 arguments = {}
 
             print(
-                f"[CLOUD ALFRED TOOL] {name}"
+                f"[{model} TOOL] {name}"
             )
 
             result = execute_tool(
@@ -908,14 +1359,18 @@ def run_cloud_brain(
             )
 
             print(
-                f"[CLOUD ALFRED TOOL RESULT] {result}"
+                f"[{model} TOOL RESULT] {result}"
             )
 
             request_messages.append(
                 {
                     "role": "tool",
-                    "tool_call_id": call.id,
-                    "content": str(result),
+                    "tool_call_id": call[
+                        "id"
+                    ],
+                    "content": str(
+                        result
+                    ),
                 }
             )
 
@@ -933,21 +1388,27 @@ def run_local_brain(
     request_messages,
 ):
 
+    tools = select_tools_for_request(
+        user_input
+    )
+
     for _ in range(
         MAX_TOOL_ROUNDS
     ):
 
         data = local_chat(
             request_messages,
-            tools=TOOL_DEFINITIONS,
+            tools=tools,
             tool_choice="auto",
-            temperature=0.3,
-            max_tokens=180,
+            temperature=0.2,
+            max_tokens=LOCAL_MAX_TOKENS,
         )
 
         message = data[
             "choices"
-        ][0][
+        ][
+            0
+        ][
             "message"
         ]
 
@@ -986,28 +1447,10 @@ def run_local_brain(
         # Assistant tool call
         # -------------------------------------------------
 
-        request_messages.append(
-            {
-                "role": "assistant",
-                "content": (
-                    message.get(
-                        "content",
-                        "",
-                    )
-                    or ""
-                ),
-                "tool_calls": [
-                    {
-                        "id": call["id"],
-                        "type": "function",
-                        "function": {
-                            "name": call["name"],
-                            "arguments": call["arguments"],
-                        },
-                    }
-                    for call in tool_calls
-                ],
-            }
+        append_tool_call_message(
+            request_messages,
+            message,
+            tool_calls,
         )
 
         # -------------------------------------------------
@@ -1016,12 +1459,16 @@ def run_local_brain(
 
         for call in tool_calls:
 
-            name = call["name"]
+            name = call[
+                "name"
+            ]
 
             try:
 
                 arguments = json.loads(
-                    call["arguments"]
+                    call[
+                        "arguments"
+                    ]
                 )
 
             except Exception:
@@ -1044,8 +1491,12 @@ def run_local_brain(
             request_messages.append(
                 {
                     "role": "tool",
-                    "tool_call_id": call["id"],
-                    "content": str(result),
+                    "tool_call_id": call[
+                        "id"
+                    ],
+                    "content": str(
+                        result
+                    ),
                 }
             )
 
@@ -1062,6 +1513,7 @@ def save_conversation(
     user_input,
     answer,
 ):
+
     messages.append(
         {
             "role": "user",
@@ -1076,8 +1528,7 @@ def save_conversation(
         }
     )
 
-    # Memory extraction is deliberately limited to
-    # messages that look like explicit personal facts.
+    # Keep memory extraction deliberately limited.
     remember_from_input(
         user_input
     )
