@@ -21,7 +21,10 @@ from tools.media import (
     pc_volume_mute,
     pc_volume_unmute,
 )
-
+from tools.gmail import(
+    draft_email,
+    send_pending_email,
+)
 
 # =========================================================
 # TOOL DEFINITIONS
@@ -354,33 +357,81 @@ TOOL_DEFINITIONS = [
 {
     "type": "function",
     "function": {
-        "name": "find_and_open_file",
+        "name": "draft_email",
         "description": (
-            "Search the user's Windows PC for a file by "
-            "name or partial name and open the best matching "
-            "file using its default Windows application. "
-            "Use this when the user asks to find, locate, "
-            "or open a file on their computer."
+            "Create a Gmail draft without sending it. "
+            "Use when the user asks to write, compose, "
+            "or draft an email."
         ),
         "parameters": {
             "type": "object",
             "properties": {
-                "query": {
+                "recipient": {
                     "type": "string",
-                    "description": (
-                        "The filename or identifying text "
-                        "to search for, such as "
-                        "resume, invoice.pdf, project.py, "
-                        "or report."
-                    ),
+                    "description": "Recipient email address.",
+                },
+                "subject": {
+                    "type": "string",
+                    "description": "Email subject.",
+                },
+                "body": {
+                    "type": "string",
+                    "description": "Complete plain-text email body.",
                 },
             },
             "required": [
-                "query",
+                "recipient",
+                "subject",
+                "body",
             ],
         },
     },
 },
+
+{
+    "type": "function",
+    "function": {
+        "name": "send_pending_email",
+        "description": (
+            "Send an email using Gmail. "
+            "If a pending ALFRED draft exists, send that draft. "
+            "If the user is asking to send a new email and there "
+            "is no pending draft, provide the recipient, subject, "
+            "and complete body and this tool will create and send "
+            "the email. "
+            "If the user asks to modify an existing pending email "
+            "and send it, provide the complete updated recipient, "
+            "subject, and body."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "recipient": {
+                    "type": "string",
+                    "description": (
+                        "Recipient email address. Required when "
+                        "sending a new email."
+                    ),
+                },
+                "subject": {
+                    "type": "string",
+                    "description": (
+                        "Complete email subject."
+                    ),
+                },
+                "body": {
+                    "type": "string",
+                    "description": (
+                        "Complete email body."
+                    ),
+                },
+            },
+            "required": [],
+        },
+    },
+},
+
+
 ]
 # =========================================================
 # TOOL REGISTRY
@@ -423,6 +474,12 @@ TOOL_FUNCTIONS = {
 
     "pc_volume_unmute":
         pc_volume_unmute,
+
+    "send_pending_email": 
+        send_pending_email,
+        
+    "draft_email":
+        draft_email,
 }
 
 

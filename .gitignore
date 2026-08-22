@@ -5,3 +5,5 @@ __pycache__/
 training_venv/
 *.wav
 models/*.onnx
+credentials.json
+gmail_token.json

@@ -55,7 +55,7 @@ groq_client = Groq(
 
 
 # Cheap / fast default model.
-FAST_MODEL = "llama-3.1-8b-instant"
+FAST_MODEL = "openai/gpt-oss-20b"
 
 # Stronger model for difficult requests / fallback.
 SMART_MODEL = "qwen/qwen3.6-27b"
@@ -193,6 +193,80 @@ Use web_search for current or external information.
 Use open_webpage for reading a specific webpage.
 
 ==================================================
+GMAIL RULES
+==================================================
+
+When the user asks to write, compose, or draft an email,
+use draft_email.
+
+When the user explicitly asks to SEND an email:
+
+- If there is an existing pending draft, use
+  send_pending_email.
+- If there is no pending draft, use send_pending_email with
+  the recipient, subject, and complete email body.
+
+If the user says "send it" after a draft was created, use
+send_pending_email without changing the draft unless the
+user explicitly requests changes.
+
+If the user asks to modify a pending email and then send it,
+use send_pending_email with the complete updated email.
+
+Never claim an email was sent unless the tool reports success.
+
+==================================================
+GMAIL MULTI-TURN COMPOSITION
+==================================================
+
+Email requests may continue across multiple voice turns.
+
+If the user starts an email request and the message is
+incomplete, do not invent the missing sentence.
+
+Keep the recipient, subject, and partial message in the
+recent conversation context.
+
+When the user provides the rest of the email in a later
+turn, combine the previous request with the new turn.
+
+Example:
+
+User:
+"Write a mail to crackly07 at gmail.com telling them that
+your app is not..."
+
+Assistant:
+Ask briefly for the missing content.
+
+User:
+"working correctly on my phone."
+
+Then create one complete email using both turns.
+
+Do not discard the recipient from the previous turn.
+
+==================================================
+SPOKEN EMAIL ADDRESS
+==================================================
+
+Speech recognition may produce email addresses as spoken
+words.
+
+Understand common spoken forms:
+
+" at " -> "@"
+" at the " -> "@"
+" dot " -> "."
+" gmail dot com" -> "gmail.com"
+" gmail com" -> "gmail.com"
+
+Normalize the recipient before passing it to Gmail.
+
+Do not invent an email address that was not present in the
+user's speech.
+
+==================================================
 MEMORY
 ==================================================
 
@@ -242,13 +316,6 @@ Do not produce long explanations unless requested.
 
 messages = []
 
-
-# =========================================================
-# MODEL ROUTER STATE
-# =========================================================
-
-# The model used most recently for normal cloud requests.
-last_cloud_model = FAST_MODEL
 
 
 # =========================================================
@@ -541,6 +608,38 @@ def build_messages(
 # =========================================================
 # TOOL FILTERING
 # =========================================================
+def normalize_spoken_email(
+    text: str,
+) -> str:
+
+    value = (
+        text
+        .strip()
+        .lower()
+    )
+
+    replacements = {
+        " at the ": "@",
+        " at ": "@",
+        " dot ": ".",
+        " gmail dot com": "gmail.com",
+        " gmail com": "gmail.com",
+        " yahoo dot com": "yahoo.com",
+        " outlook dot com": "outlook.com",
+    }
+
+    for old, new in replacements.items():
+        value = value.replace(
+            old,
+            new,
+        )
+
+    value = value.replace(
+        " ",
+        "",
+    )
+
+    return value
 
 def get_tool_definition(
     name: str,
@@ -584,9 +683,9 @@ def select_tools_for_request(
 
     selected_names = set()
 
-    # -----------------------------------------------------
-    # YouTube
-    # -----------------------------------------------------
+    # =====================================================
+    # YOUTUBE
+    # =====================================================
 
     youtube_words = (
         "youtube",
@@ -604,15 +703,15 @@ def select_tools_for_request(
     ):
 
         selected_names.update(
-            {
+            [
                 "play_youtube",
                 "youtube_control",
-            }
+            ]
         )
 
-    # -----------------------------------------------------
-    # Spotify
-    # -----------------------------------------------------
+    # =====================================================
+    # SPOTIFY
+    # =====================================================
 
     spotify_words = (
         "spotify",
@@ -630,15 +729,15 @@ def select_tools_for_request(
     ):
 
         selected_names.update(
-            {
+            [
                 "play_spotify",
                 "spotify_control",
-            }
+            ]
         )
 
-    # -----------------------------------------------------
-    # Files
-    # -----------------------------------------------------
+    # =====================================================
+    # FILES
+    # =====================================================
 
     file_words = (
         "file",
@@ -663,9 +762,9 @@ def select_tools_for_request(
             "find_and_open_file"
         )
 
-    # -----------------------------------------------------
-    # Windows apps
-    # -----------------------------------------------------
+    # =====================================================
+    # WINDOWS APPLICATIONS
+    # =====================================================
 
     application_words = (
         "open app",
@@ -687,9 +786,9 @@ def select_tools_for_request(
             "open_application"
         )
 
-    # -----------------------------------------------------
-    # Volume
-    # -----------------------------------------------------
+    # =====================================================
+    # VOLUME
+    # =====================================================
 
     volume_words = (
         "volume",
@@ -705,48 +804,104 @@ def select_tools_for_request(
     ):
 
         selected_names.update(
-            {
+            [
                 "pc_volume_up",
                 "pc_volume_down",
                 "pc_volume_mute",
                 "pc_volume_unmute",
-            }
+            ]
         )
 
-    # -----------------------------------------------------
-    # Web
-    # -----------------------------------------------------
+    # =====================================================
+    # WEB
+    # =====================================================
 
-    web_words = (
-        "search the web",
-        "search online",
-        "latest news",
-        "current",
-        "today",
-        "price",
-        "website",
-        "look up",
-        "find online",
+    web_phrases = (
+    "search the web",
+    "search online",
+    "search google",
+    "look this up online",
+    "look it up online",
+    "find online",
+    "browse the web",
+    "latest news",
+    "current news",
+    "current information",
+    "current price",
+    "website for",
+)
+
+    if any(
+        word in text
+        for word in web_phrases
+    ):
+
+        selected_names.update(
+            [
+                "web_search",
+                "open_webpage",
+            ]
+        )
+
+    # =====================================================
+    # GMAIL
+    # =====================================================
+
+    gmail_words = (
+        "email",
+        "e-mail",
+        "gmail",
+        "mail",
+        "send an email",
+        "send a mail",
+        "write an email",
+        "write a mail",
+        "write on mail",
+        "write me a mail",
+        "write me an email",
+        "draft an email",
+        "compose an email",
+        "send it",
+        "send the email",
+        "send that email",
+        "send that",
+        "tell them that",
+        "telling them that",
+        "after best regards",
+        "add my name",
+        "change the email",
+        "change the message",
     )
 
     if any(
         word in text
-        for word in web_words
+        for word in gmail_words
     ):
 
         selected_names.update(
-            {
-                "web_search",
-                "open_webpage",
-            }
+            [
+                "draft_email",
+                "send_pending_email",
+            ]
         )
+    # =====================================================
+    # GMAIL HAS PRIORITY OVER GENERIC WEB TOOLS
+    # =====================================================
 
-    # -----------------------------------------------------
-    # If nothing matched, don't send tools.
-    # -----------------------------------------------------
+    if "draft_email" in selected_names or "send_pending_email" in selected_names:
+        selected_names.discard(
+            "web_search"
+    )
+
+        selected_names.discard(
+            "open_webpage"
+    )
+
+    # =====================================================
+    # RETURN ONLY RELEVANT TOOLS
+    # =====================================================
 
     if not selected_names:
-
         return []
 
     return [
@@ -759,6 +914,7 @@ def select_tools_for_request(
             "name"
         ) in selected_names
     ]
+
 
 
 # =========================================================
@@ -856,9 +1012,8 @@ def cloud_chat(
     tools=None,
     tool_choice="auto",
     temperature=0.3,
-    max_tokens=FAST_MAX_TOKENS,
+    max_tokens=180,
 ):
-
     kwargs = {
         "model": model,
         "messages": request_messages,
@@ -866,16 +1021,18 @@ def cloud_chat(
         "max_tokens": max_tokens,
     }
 
-    if tools:
+    # Hide reasoning where supported.
+    if model == SMART_MODEL:
+        kwargs["reasoning_effort"] = "none"
+        kwargs["reasoning_format"] = "hidden"
 
+    if tools:
         kwargs["tools"] = tools
         kwargs["tool_choice"] = tool_choice
 
     return groq_client.chat.completions.create(
         **kwargs
     )
-
-
 # =========================================================
 # NORMALISE TOOL CALLS
 # =========================================================
@@ -1185,31 +1342,17 @@ def run_model(
     request_messages,
     tools,
 ):
-
     try:
-
-        result = run_model_once(
+        return run_model_once(
             model=model,
             user_input=user_input,
             request_messages=request_messages,
             tools=tools,
         )
 
-        global last_cloud_model
-        last_cloud_model = model
-
-        return result
-
     except Exception as error:
 
-        # We deliberately don't retry every exception.
-        # The fallback is primarily for model/rate-limit
-        # failures.
-
-        if not is_rate_limit_error(
-            error
-        ):
-
+        if not is_rate_limit_error(error):
             raise
 
         print(
@@ -1220,17 +1363,12 @@ def run_model(
             f"[ALFRED] Switching to {fallback_model}."
         )
 
-        result = run_model_once(
+        return run_model_once(
             model=fallback_model,
             user_input=user_input,
             request_messages=request_messages,
             tools=tools,
         )
-
-        global last_cloud_model
-        last_cloud_model = fallback_model
-
-        return result
 
 
 # =========================================================

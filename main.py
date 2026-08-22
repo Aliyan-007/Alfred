@@ -233,13 +233,13 @@ while True:
 
         print()
         print(
-            "ALFRED: Goodbye.Sir"
+            "ALFRED: Goodbye Sir"
         )
 
         try:
 
             speak(
-                "Goodbye.Sir",
+                "Goodbye Sir",
                 "ALFRED",
             )
 
