@@ -301,6 +301,29 @@ report the failure.
 Never pretend an action happened.
 
 ==================================================
+YOUTUBE RESEARCH + DOCUMENTS
+==================================================
+
+When the user asks to research a topic on YouTube, use
+research_youtube.
+
+Do not use play_youtube for research requests unless the
+user also asks to play a video.
+
+After research_youtube returns its research text, summarize
+the useful information before saving it.
+
+If the user asks for Notepad, use save_to_notepad.
+
+If the user asks for Word, Microsoft Word, or a DOCX file,
+use save_to_word.
+
+Do not claim a document was created unless the save tool
+reports success.
+
+Preserve source URLs in the research document.
+
+==================================================
 IMPORTANT
 ==================================================
 
@@ -897,6 +920,85 @@ def select_tools_for_request(
             "open_webpage"
     )
 
+    
+    # =====================================================
+    # YOUTUBE RESEARCH
+    # =====================================================
+
+    research_words = (
+        "research",
+        "information",
+        "details",
+        "detail",
+        "learn about",
+        "explain",
+        "summarize",
+        "summary",
+        "analyse",
+        "analyze",
+    )
+
+    youtube_requested = any(
+        word in text
+        for word in (
+            "youtube",
+            "video",
+            "videos",
+        )
+    )
+
+    research_requested = any(
+        word in text
+        for word in research_words
+    )
+
+    if youtube_requested and research_requested:
+
+        selected_names.discard(
+            "play_youtube"
+        )
+
+        selected_names.discard(
+            "youtube_control"
+        )
+
+        selected_names.add(
+            "research_youtube"
+        )  
+    # =====================================================
+    # DOCUMENT OUTPUT
+    # =====================================================
+
+    if "notepad" in text:
+        selected_names.add(
+            "save_to_notepad"
+        )
+
+    if (
+        "word" in text
+        or ".docx" in text
+        or "microsoft word" in text
+    ):
+        selected_names.add(
+            "save_to_word"
+        )
+
+    # =====================================================
+    # GMAIL HAS PRIORITY OVER GENERIC WEB
+    # =====================================================
+
+    if (
+        "draft_email" in selected_names
+        or "send_pending_email" in selected_names
+    ):
+        selected_names.discard(
+            "web_search"
+        )
+
+        selected_names.discard(
+            "open_webpage"
+        )
+
     # =====================================================
     # RETURN ONLY RELEVANT TOOLS
     # =====================================================
@@ -914,9 +1016,6 @@ def select_tools_for_request(
             "name"
         ) in selected_names
     ]
-
-
-
 # =========================================================
 # COMPLEXITY ROUTER
 # =========================================================
@@ -1274,7 +1373,6 @@ def run_cloud_brain(
         else FAST_MODEL
     )
 
-    global last_cloud_model
 
     # -----------------------------------------------------
     # First model

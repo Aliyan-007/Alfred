@@ -1,9 +1,11 @@
 import json
 
+
 from tools.system import open_application
 from tools.web_search import web_search
 from tools.file_finder import find_and_open_file
 from tools.webpage import open_webpage
+from tools.youtube_research import research_youtube
 
 from tools.spotify import (
     play_spotify,
@@ -21,11 +23,16 @@ from tools.media import (
     pc_volume_mute,
     pc_volume_unmute,
 )
+
 from tools.gmail import(
     draft_email,
     send_pending_email,
 )
 
+from tools.document_writer import (
+    save_to_notepad,
+    save_to_word,
+)
 # =========================================================
 # TOOL DEFINITIONS
 # =========================================================
@@ -431,6 +438,95 @@ TOOL_DEFINITIONS = [
     },
 },
 
+{
+    "type": "function",
+    "function": {
+        "name": "save_to_notepad",
+        "description": (
+            "Save research or generated text to a plain-text "
+            "file and open it in Windows Notepad."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Short title for the file.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Complete text to save.",
+                },
+            },
+            "required": [
+                "title",
+                "content",
+            ],
+        },
+    },
+},
+{
+    "type": "function",
+    "function": {
+        "name": "save_to_word",
+        "description": (
+            "Create a Microsoft Word .docx document from "
+            "research or generated text and open it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Document title.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Complete text to put in the document.",
+                },
+            },
+            "required": [
+                "title",
+                "content",
+            ],
+        },
+    },
+},
+
+{
+    "type": "function",
+    "function": {
+        "name": "research_youtube",
+        "description": (
+            "Search YouTube for a topic and return research "
+            "text containing relevant video titles, channels, "
+            "dates, descriptions, statistics, and URLs. "
+            "Use this for research, not ordinary video playback."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": (
+                        "The topic to research on YouTube."
+                    ),
+                },
+                "max_results": {
+                    "type": "integer",
+                    "description": (
+                        "Number of relevant videos to research. "
+                        "Use 5 normally."
+                    ),
+                },
+            },
+            "required": [
+                "query",
+            ],
+        },
+    },
+},
+
 
 ]
 # =========================================================
@@ -480,6 +576,15 @@ TOOL_FUNCTIONS = {
         
     "draft_email":
         draft_email,
+
+    "save_to_notepad":
+        save_to_notepad,
+
+    "save_to_word":
+        save_to_word,
+
+    "research_youtube":
+        research_youtube,    
 }
 
 

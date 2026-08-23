@@ -2,4 +2,6 @@
 
 cd /d "C:\Users\Elite Laptops\Desktop\alfred"
 
-start "" /min ".venv\Scripts\python.exe" "main.py"
+call ".venv\Scripts\activate.bat"
+
+python "main.py"
