@@ -1,0 +1,19 @@
+{
+  "pc_01": {
+    "id": "pc_01",
+    "name": "My PC",
+    "type": "pc",
+    "online": true,
+    "last_seen": "2026-08-24T13:36:23.474999+00:00",
+    "capabilities": [
+      "browser",
+      "spotify",
+      "youtube",
+      "web_search",
+      "filesystem",
+      "applications"
+    ],
+    "permissions": [],
+    "metadata": {}
+  }
+}

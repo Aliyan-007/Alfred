@@ -986,23 +986,61 @@ def select_tools_for_request(
             "research_youtube"
         )  
     # =====================================================
-    # DOCUMENT OUTPUT
+    # RESEARCH + DOCUMENT OUTPUT
     # =====================================================
 
-    if "notepad" in text:
+    is_research_request = any(
+        phrase in text
+        for phrase in (
+            "research",
+            "research on",
+            "research about",
+            "find information",
+            "gather information",
+            "collect information",
+            "details about",
+            "learn about",
+        )
+    )
+
+    if is_research_request:
+
+        # YouTube research
         selected_names.add(
-            "save_to_notepad"
+            "research_youtube"
         )
 
-    if (
-        "word" in text
-        or ".docx" in text
-        or "microsoft word" in text
-    ):
-        selected_names.add(
-            "save_to_word"
+        # General web research
+        selected_names.update(
+            [
+                "web_search",
+                "open_webpage",
+            ]
         )
+        if "research_youtube" in selected_names:
+            selected_names.discard(
+                "play_youtube"
+            )
 
+            selected_names.discard(
+                "youtube_control"
+            )
+
+        # Output destination
+        if (
+           "word" in text
+            or ".docx" in text
+            or "microsoft word" in text
+            or "word document" in text
+        ):
+            selected_names.add(
+                "save_to_word"
+            )
+
+        elif "notepad" in text:
+            selected_names.add(
+                "save_to_notepad"
+            )
     # =====================================================
     # GMAIL HAS PRIORITY OVER GENERIC WEB
     # =====================================================

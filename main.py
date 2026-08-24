@@ -223,46 +223,16 @@ def process_command():
     # EXIT
     # =====================================================
 
-    # ---------------------------------------------------------
-    # RETURN TO WAKE WORD
-    # ---------------------------------------------------------
+    # =====================================================
+# EXIT / SHUTDOWN
+# =====================================================
 
     if normalized_input in {
         "exit",
         "bye",
         "goodbye",
         "good bye",
-        "shutdown",
-        "Shut"
-        "stop listening",
-        "go back to sleep",
-    }:
-
-        print(
-            "ALFRED: Returning to wake-word listening, Sir."
-        ) 
-
-        try:
-            speak(
-                "Returning to wake-word listening, Sir.",
-                "ALFRED",
-            )
-        except Exception:
-            pass
-
-        return SystemExit
-
-
-# ---------------------------------------------------------
-# FULL SHUTDOWN
-# ---------------------------------------------------------
-
-    if normalized_input in {
-        "exit",
-        "bye",
-        "goodbye",
-        "good bye",
-        "shutdown",
+        " shutdown",
         "shut down",
         "shutdown alfred",
     }:
@@ -280,6 +250,37 @@ def process_command():
             pass
 
         raise SystemExit
+
+
+# =====================================================
+# RETURN TO WAKE-WORD LISTENING
+# =====================================================
+
+        if normalized_input in {
+            "stop listening",
+            "go back to sleep",
+        }:
+
+            print(
+                "ALFRED: Returning to wake-word listening, Sir."
+            )
+
+            try:
+                speak(
+                    "Returning to wake-word listening, Sir.",
+                    "ALFRED",
+                )
+            except Exception:
+                pass
+
+            return
+
+
+# ---------------------------------------------------------
+# FULL SHUTDOWN
+# ---------------------------------------------------------
+
+    
     # =====================================================
     # ASSISTANT ROUTER
     # =====================================================
@@ -371,6 +372,8 @@ def process_command():
 while True:
 
     try:
+
+        time.sleep(1.5)
 
         wait_for_wake_word(
             wake_model

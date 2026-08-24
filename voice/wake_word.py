@@ -14,9 +14,9 @@ CHUNK_SIZE = 1280
 
 MODEL_NAME = "alexa_v0.1"
 
-THRESHOLD = 0.50
+THRESHOLD = 0.70
 
-WAKE_COOLDOWN = 0.50
+WAKE_COOLDOWN = 1.5
 
 
 # =========================================================
