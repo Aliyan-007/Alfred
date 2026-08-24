@@ -22,21 +22,36 @@ VIDEOS_URL = (
     "https://www.googleapis.com/youtube/v3/videos"
 )
 
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+RESEARCH_DIR = os.path.join(
+    BASE_DIR,
+    "research",
+)
+
+CURRENT_RESEARCH_FILE = os.path.join(
+    RESEARCH_DIR,
+    "current_youtube_research.txt",
+)
+
+os.makedirs(
+    RESEARCH_DIR,
+    exist_ok=True,
+)
+
 
 # =========================================================
-# SEARCH YOUTUBE
+# SEARCH
 # =========================================================
 
 def search_youtube_research(
     query: str,
     max_results: int = 5,
 ):
-    """
-    Search YouTube for research purposes.
-
-    Returns video metadata rather than controlling playback.
-    """
-
     query = query.strip()
 
     if not query:
@@ -77,8 +92,7 @@ def search_youtube_research(
             item.get(
                 "id",
                 {},
-            )
-            .get(
+            ).get(
                 "videoId"
             )
         )
@@ -121,15 +135,12 @@ def search_youtube_research(
 
 
 # =========================================================
-# GET VIDEO DETAILS
+# DETAILS
 # =========================================================
 
 def get_youtube_video_details(
     video_ids,
 ):
-    """
-    Retrieve additional metadata for selected videos.
-    """
 
     if not video_ids:
         return []
@@ -168,7 +179,78 @@ def get_youtube_video_details(
 
 
 # =========================================================
-# RESEARCH TEXT
+# SAVE CURRENT RESEARCH
+# =========================================================
+
+def save_current_research(
+    query: str,
+    results,
+):
+
+    lines = [
+        f"YouTube Research",
+        f"Topic: {query}",
+        "=" * 70,
+        "",
+    ]
+
+    for index, result in enumerate(
+        results,
+        start=1,
+    ):
+
+        description = (
+            result.get(
+                "description",
+                "",
+            )
+            .strip()
+        )
+
+        # Keep the document useful without making it huge.
+        if len(description) > 1200:
+            description = (
+                description[:1200]
+                + "..."
+            )
+
+        lines.extend(
+            [
+                f"VIDEO {index}",
+                f"Title: {result.get('title', '')}",
+                f"Channel: {result.get('channel', '')}",
+                f"Published: {result.get('published_at', '')}",
+                f"URL: {result.get('url', '')}",
+                "",
+                "Description:",
+                description,
+                "",
+                "-" * 70,
+                "",
+            ]
+        )
+
+    content = "\n".join(
+        lines
+    )
+
+    with open(
+        CURRENT_RESEARCH_FILE,
+        "w",
+        encoding="utf-8",
+    ) as file:
+
+        file.write(
+            content
+        )
+
+    return (
+        content
+    )
+
+
+# =========================================================
+# RESEARCH YOUTUBE
 # =========================================================
 
 def research_youtube(
@@ -176,9 +258,23 @@ def research_youtube(
     max_results: int = 5,
 ):
     """
-    Search YouTube and turn the returned metadata into a
-    clean text research packet for ALFRED.
+    Search YouTube for research and store the resulting
+    research packet locally.
+
+    The full research is written to:
+        research/current_youtube_research.txt
+
+    Returning only a short confirmation keeps LLM tool
+    arguments and follow-up tool calls small.
     """
+
+    query = query.strip()
+
+    if not query:
+
+        return (
+            "I need a YouTube research topic, Sir."
+        )
 
     results = search_youtube_research(
         query,
@@ -188,7 +284,8 @@ def research_youtube(
     if not results:
 
         return (
-            f"No YouTube results were found for '{query}'."
+            f"No YouTube results were found for "
+            f"'{query}', Sir."
         )
 
     video_ids = [
@@ -196,21 +293,18 @@ def research_youtube(
         for item in results
     ]
 
-    detailed_items = get_youtube_video_details(
+    details = get_youtube_video_details(
         video_ids
     )
 
     details_by_id = {
         item.get("id"): item
-        for item in detailed_items
+        for item in details
     }
 
-    sections = []
+    enriched = []
 
-    for index, result in enumerate(
-        results,
-        start=1,
-    ):
+    for result in results:
 
         video = details_by_id.get(
             result["video_id"],
@@ -227,65 +321,53 @@ def research_youtube(
             {},
         )
 
-        title = (
-            snippet.get(
-                "title"
-            )
-            or result["title"]
+        enriched.append(
+            {
+                "video_id": result["video_id"],
+                "title": (
+                    snippet.get(
+                        "title"
+                    )
+                    or result["title"]
+                ),
+                "channel": (
+                    snippet.get(
+                        "channelTitle"
+                    )
+                    or result["channel"]
+                ),
+                "published_at": (
+                    snippet.get(
+                        "publishedAt"
+                    )
+                    or result["published_at"]
+                ),
+                "description": (
+                    snippet.get(
+                        "description"
+                    )
+                    or result["description"]
+                ),
+                "views": statistics.get(
+                    "viewCount",
+                    "N/A",
+                ),
+                "likes": statistics.get(
+                    "likeCount",
+                    "N/A",
+                ),
+                "url": result["url"],
+            }
         )
 
-        channel = (
-            snippet.get(
-                "channelTitle"
-            )
-            or result["channel"]
-        )
-
-        description = (
-            snippet.get(
-                "description"
-            )
-            or result["description"]
-        )
-
-        published = (
-            snippet.get(
-                "publishedAt"
-            )
-            or result["published_at"]
-        )
-
-        views = statistics.get(
-            "viewCount",
-            "N/A",
-        )
-
-        likes = statistics.get(
-            "likeCount",
-            "N/A",
-        )
-
-        sections.append(
-            "\n".join(
-                [
-                    f"VIDEO {index}",
-                    f"Title: {title}",
-                    f"Channel: {channel}",
-                    f"Published: {published}",
-                    f"Views: {views}",
-                    f"Likes: {likes}",
-                    f"URL: {result['url']}",
-                    "",
-                    "Description:",
-                    description,
-                ]
-            )
-        )
+    content = save_current_research(
+        query,
+        enriched,
+    )
 
     return (
-        f"YouTube research for: {query}\n"
-        f"{'=' * 60}\n\n"
-        + "\n\n".join(
-            sections
-        )
+        f"YouTube research completed for '{query}', Sir. "
+        f"{len(enriched)} videos were collected and saved "
+        f"to the current research packet.\n\n"
+        f"Research file: {CURRENT_RESEARCH_FILE}"
     )

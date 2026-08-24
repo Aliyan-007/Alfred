@@ -26,6 +26,28 @@ os.makedirs(
     exist_ok=True,
 )
 
+CURRENT_RESEARCH_FILE = os.path.join(
+    BASE_DIR,
+    "research",
+    "current_youtube_research.txt",
+)
+
+
+
+def get_research_content():
+    if not os.path.exists(
+        CURRENT_RESEARCH_FILE
+    ):
+        return None
+
+    with open(
+        CURRENT_RESEARCH_FILE,
+        "r",
+        encoding="utf-8",
+    ) as file:
+        content = file.read().strip()
+
+    return content or None
 
 # =========================================================
 # SAFE FILENAME
@@ -59,93 +81,34 @@ def safe_filename(
 # =========================================================
 # SAVE TO NOTEPAD
 # =========================================================
-
-def save_to_notepad(
-    title: str,
-    content: str,
-):
-    """
-    Save text as a .txt file and open it in Windows Notepad.
-    """
-
-    title = title.strip()
-    content = content.strip()
-
-    if not title:
-        title = "ALFRED Research"
-
-    timestamp = datetime.now().strftime(
-        "%Y%m%d_%H%M%S"
-    )
-
-    filename = (
-        f"{safe_filename(title)}_{timestamp}.txt"
-    )
-
-    path = os.path.join(
-        RESEARCH_DIR,
-        filename,
-    )
-
-    try:
-
-        with open(
-            path,
-            "w",
-            encoding="utf-8",
-        ) as file:
-
-            file.write(
-                content
-            )
-
-    except Exception as error:
-
-        return (
-            "I couldn't save the text file, Sir. "
-            f"{error}"
-        )
-
-    try:
-
-        subprocess.Popen(
-            [
-                "notepad.exe",
-                path,
-            ]
-        )
-
-    except Exception as error:
-
-        return (
-            f"The research was saved to {path}, Sir, "
-            f"but I couldn't open Notepad: {error}"
-        )
-
-    return (
-        f"Research saved to Notepad, Sir. "
-        f"File: {path}"
-    )
-
-
-# =========================================================
-# SAVE TO WORD
-# =========================================================
-
 def save_to_word(
-    title: str,
-    content: str,
+    title: str = "",
+    content: str = "",
 ):
     """
-    Create a .docx file and open it using the default
-    Windows application for Word documents.
+    Create a Word document.
+
+    If content isn't supplied, automatically use the most
+    recent YouTube research packet.
     """
 
-    title = title.strip()
-    content = content.strip()
+    title = (
+        title.strip()
+        if title
+        else "ALFRED YouTube Research"
+    )
 
-    if not title:
-        title = "ALFRED Research"
+    if not content.strip():
+        content = (
+            get_research_content()
+            or ""
+        )
+
+    if not content:
+        return (
+            "There is no research content available "
+            "to save, Sir."
+        )
 
     timestamp = datetime.now().strftime(
         "%Y%m%d_%H%M%S"
@@ -164,26 +127,18 @@ def save_to_word(
 
         document = Document()
 
-        # -------------------------------------------------
-        # Title
-        # -------------------------------------------------
-
         document.add_heading(
             title,
             level=0,
         )
 
-        # -------------------------------------------------
-        # Metadata
-        # -------------------------------------------------
-
         metadata = document.add_paragraph()
 
-        metadata_run = metadata.add_run(
+        run = metadata.add_run(
             "Created by ALFRED\n"
         )
 
-        metadata_run.bold = True
+        run.bold = True
 
         metadata.add_run(
             datetime.now().strftime(
@@ -193,35 +148,23 @@ def save_to_word(
 
         document.add_paragraph()
 
-        # -------------------------------------------------
-        # Content
-        # -------------------------------------------------
-
-        # Preserve paragraphs from the generated research.
-        paragraphs = content.split(
+        for paragraph_text in content.split(
             "\n\n"
-        )
+        ):
 
-        for text in paragraphs:
+            paragraph_text = (
+                paragraph_text.strip()
+            )
 
-            text = text.strip()
-
-            if not text:
+            if not paragraph_text:
                 continue
 
             paragraph = document.add_paragraph(
-                text
+                paragraph_text
             )
 
             for run in paragraph.runs:
-
-                run.font.size = Pt(
-                    11
-                )
-
-        # -------------------------------------------------
-        # Save
-        # -------------------------------------------------
+                run.font.size = Pt(11)
 
         document.save(
             path
@@ -234,9 +177,123 @@ def save_to_word(
             f"{error}"
         )
 
-    # -----------------------------------------------------
-    # Open document
-    # -----------------------------------------------------
+    try:
+
+        os.startfile(
+            path
+        )
+
+    except Exception as error:
+
+        return (
+            f"The Word document was created at {path}, Sir, "
+            f"but Windows couldn't open it: {error}"
+        )
+
+    return (
+        f"Research saved to Word, Sir. "
+        f"File: {path}"
+    )
+
+# =========================================================
+# SAVE TO WORD
+# =========================================================
+
+def save_to_word(
+    title: str = "",
+    content: str = "",
+):
+    """
+    Create a Word document.
+
+    If content isn't supplied, automatically use the most
+    recent YouTube research packet.
+    """
+
+    title = (
+        title.strip()
+        if title
+        else "ALFRED YouTube Research"
+    )
+
+    if not content.strip():
+        content = (
+            get_research_content()
+            or ""
+        )
+
+    if not content:
+        return (
+            "There is no research content available "
+            "to save, Sir."
+        )
+
+    timestamp = datetime.now().strftime(
+        "%Y%m%d_%H%M%S"
+    )
+
+    filename = (
+        f"{safe_filename(title)}_{timestamp}.docx"
+    )
+
+    path = os.path.join(
+        RESEARCH_DIR,
+        filename,
+    )
+
+    try:
+
+        document = Document()
+
+        document.add_heading(
+            title,
+            level=0,
+        )
+
+        metadata = document.add_paragraph()
+
+        run = metadata.add_run(
+            "Created by ALFRED\n"
+        )
+
+        run.bold = True
+
+        metadata.add_run(
+            datetime.now().strftime(
+                "%Y-%m-%d %H:%M"
+            )
+        )
+
+        document.add_paragraph()
+
+        for paragraph_text in content.split(
+            "\n\n"
+        ):
+
+            paragraph_text = (
+                paragraph_text.strip()
+            )
+
+            if not paragraph_text:
+                continue
+
+            paragraph = document.add_paragraph(
+                paragraph_text
+            )
+
+            for run in paragraph.runs:
+                run.font.size = Pt(11)
+
+        document.save(
+            path
+        )
+
+    except Exception as error:
+
+        return (
+            "I couldn't create the Word document, Sir. "
+            f"{error}"
+        )
 
     try:
 

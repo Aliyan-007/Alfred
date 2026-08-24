@@ -192,9 +192,6 @@ def process_command():
 
         return
 
-    print(
-        "Recording complete."
-    )
 
     user_input = transcribe_audio(
         audio_file
@@ -235,6 +232,8 @@ def process_command():
         "bye",
         "goodbye",
         "good bye",
+        "shutdown",
+        "Shut"
         "stop listening",
         "go back to sleep",
     }:
@@ -251,7 +250,7 @@ def process_command():
         except Exception:
             pass
 
-        return
+        return SystemExit
 
 
 # ---------------------------------------------------------
@@ -388,6 +387,11 @@ while True:
         print()
 
     except SystemExit:
+
+        print()
+        print(
+            "ALFRED: Shutdown complete."
+        )
 
         break
 

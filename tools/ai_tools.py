@@ -470,25 +470,27 @@ TOOL_DEFINITIONS = [
     "function": {
         "name": "save_to_word",
         "description": (
-            "Create a Microsoft Word .docx document from "
-            "research or generated text and open it."
+            "Save the latest research or supplied text as a "
+            "Microsoft Word document and open it. If content "
+            "is omitted, use the most recent YouTube research."
         ),
         "parameters": {
             "type": "object",
             "properties": {
                 "title": {
                     "type": "string",
-                    "description": "Document title.",
+                    "description": (
+                        "Optional document title."
+                    ),
                 },
                 "content": {
                     "type": "string",
-                    "description": "Complete text to put in the document.",
+                    "description": (
+                        "Optional text. Leave empty to save "
+                        "the latest research."
+                    ),
                 },
             },
-            "required": [
-                "title",
-                "content",
-            ],
         },
     },
 },

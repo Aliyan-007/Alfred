@@ -324,6 +324,26 @@ reports success.
 Preserve source URLs in the research document.
 
 ==================================================
+YOUTUBE RESEARCH OUTPUT
+==================================================
+
+When research_youtube succeeds, the research is stored
+locally as the current research packet.
+
+If the user asks to save that research to Word, call
+save_to_word with the title only.
+
+If the user asks to save that research to Notepad, call
+save_to_notepad with the title only.
+
+Do NOT copy the entire research packet into the tool
+arguments.
+
+Do NOT invent research content.
+
+The document tools automatically read the latest research.
+
+==================================================
 IMPORTANT
 ==================================================
 
