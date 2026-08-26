@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ALFRED</string>
+    <string name="app_tagline">Android Device Agent</string>
+    <string name="notif_action_stop">Stop</string>
+    <string name="accessibility_service_label">ALFRED Accessibility</string>
+    <string name="accessibility_service_description">Allows ALFRED to perform explicit UI automation (tap, swipe, type, back, home) only when you enable it. This is optional and auditable.</string>
+</resources>

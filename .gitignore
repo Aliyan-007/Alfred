@@ -7,3 +7,6 @@ training_venv/
 models/*.onnx
 credentials.json
 gmail_token.json
+# Large Piper AI models
+models/piper/*.onnx
+models/piper/*.onnx.json

@@ -1,22 +1,45 @@
 import uuid
 
+
 # =========================================================
-# COMMAND ACTIONS
+# ALFRED DEVICE COMMAND ACTIONS
 # =========================================================
 
 ALLOWED_ACTIONS = {
+    # Core
     "ping",
+
+    # Windows
     "open_application",
+
+    # Browser / Web
     "open_url",
-    "play_media",
-    "pause_media",
-    "next_media",
-    "previous_media",
-    "search_web",
-    "find_file",
-    "open_file",
-    "get_battery",
-    "send_notification",
+    "web_search",
+
+    # Spotify
+    "play_spotify",
+    "spotify_control",
+
+    # YouTube
+    "play_youtube",
+    "youtube_control",
+
+    # Volume
+    "pc_volume_up",
+    "pc_volume_down",
+    "pc_volume_mute",
+    "pc_volume_unmute",
+
+    # Gmail
+    "draft_email",
+    "send_pending_email",
+
+    # Documents
+    "save_to_notepad",
+    "save_to_word",
+
+    # Research
+    "research_youtube",
 }
 
 
@@ -29,10 +52,6 @@ def create_command(
     action: str,
     parameters=None,
 ):
-    """
-    Create a standard ALFRED command.
-    """
-
     device_id = device_id.strip()
     action = action.strip()
 
@@ -80,15 +99,6 @@ def create_command(
 def validate_command(
     command,
 ):
-    """
-    Check whether a command follows the ALFRED protocol.
-
-    Returns:
-        (True, "OK")
-    or:
-        (False, "reason")
-    """
-
     if not isinstance(
         command,
         dict,
@@ -118,7 +128,6 @@ def validate_command(
         command["id"],
         str,
     ):
-
         return (
             False,
             "id must be a string.",
@@ -128,7 +137,6 @@ def validate_command(
         command["device"],
         str,
     ):
-
         return (
             False,
             "device must be a string.",
@@ -138,14 +146,12 @@ def validate_command(
         command["action"],
         str,
     ):
-
         return (
             False,
             "action must be a string.",
         )
 
     if command["action"] not in ALLOWED_ACTIONS:
-
         return (
             False,
             f"Unsupported action: "
@@ -156,7 +162,6 @@ def validate_command(
         command["parameters"],
         dict,
     ):
-
         return (
             False,
             "parameters must be a dictionary.",
