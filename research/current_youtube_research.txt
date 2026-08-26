@@ -1,67 +1,191 @@
 YouTube Research
-Topic: Formula 1 rules
+Topic: Python tutorials
 ======================================================================
 
 VIDEO 1
-Title: Everything You Need To Know About Formula One | Race, Rules & Details | F1 Explained
-Channel: FORMULA 1
-Published: 2024-02-29T18:20:00Z
-URL: https://www.youtube.com/watch?v=zYpKWBXhcik
+Title: Python Full Course for Beginners
+Channel: Programming with Mosh
+Published: 2019-02-18T15:00:08Z
+URL: https://www.youtube.com/watch?v=_uQrJ0TkZlc
 
 Description:
-Get ready, set, go! Here are the crucial rules for Formula One's fast-speed racing. From event rules, racing systems, flags, colours, & more!
+Learn Python for AI, machine learning, and web development with this beginner-friendly course! 🚀 Get 6 months of PyCharm FREE with the coupon in the description!
 
-For more F1® videos, visit https://www.Formula1.com
+🚀 Want to dive deeper?
+- Check out my Python mastery course: https://mosh.link/python-course
+- Subscribe for more awesome Python content: https://goo.gl/6PYaGF
 
-Follow F1®:
-https://www.instagram.com/F1
-https://www.facebook.com/Formula1/
-https://www.twitter.com/F1
-https://www.twitch.tv/formula1
-https://www.tiktok.com/@f1
+🔗 Related videos 
+https://youtu.be/yVl_G-F7m8c?si=aoIiT6CyaRRfBsRM
 
-#F1
+👉 New version available Watch here: https://youtu.be/kqtD5dpn9C8
+
+📕 Get the FREE goodies:
+- Python cheat sheet: https://mosh.link/python-cheatsheet
+- Supplementary materials (spreadsheet): https://github.com/mosh-hamedani/python-supplementary-materials
+- Get 6 months of PyCharm for free with this coupon code: MOSH_YOUTUBE - Redeem it at: https://jb.gg/redeem
+
+✋ Stay connected:
+- Twitter: https://twitter.com/moshhamedani
+- Facebook: https://www.facebook.com/programmingwithmosh/
+- Instagram: https://www.instagram.com/codewithmosh.official/
+- LinkedIn: https://www.linkedin.com/school/codewithmosh/
+
+⭐ My favorite Python books
+- Python Crash Course: https://amzn.to/2GqMdjG
+- Automate the Boring Stuff with Python: https://amzn.to/2N71d6S
+- A Smarter Way to Learn Python: https://amzn.to/2UZa6lE
+- Machine...
 
 ----------------------------------------------------------------------
 
 VIDEO 2
-Title: F101: Moving under braking | Formula 1 Overtaking Rules #formula1
-Channel: The Racing Company
-Published: 2025-05-12T06:55:39Z
-URL: https://www.youtube.com/watch?v=VWxtEVSbqjo
+Title: Top 10 Most Important Python Functions You Must Know! 🚀 | Python Tutorial for Beginners
+Channel: Computer Skills
+Published: 2025-08-21T17:00:55Z
+URL: https://www.youtube.com/watch?v=gbYLsUngzLc
 
 Description:
-A quick visual of what it means to move under braking in Formula 1 — and why it’s so risky.
-The defending driver suddenly changes line in the braking zone, forcing the attacker to react mid-brake. That’s how crashes happen.
-
-This is the fourth in our rapid learning series all about F1 Overtaking rules - Learn the basics in a bit more time than it takes for a Formula pitstop!
-
-👉 If you enjoy quick, visual breakdowns of F1 rules, stay tuned — we're testing new formats!
-
-#Formula1 #f1 #MexicoGP #Norris #Verstappen #F1Shorts #F1Animation #F1Debate #f124 #f12024 #f1 #formula1 #f1india #f1shorts #automobile #racing #f25 #rules  #Motorsport #F1Rules #RaceDay #F1Explained #F1TikTok #F1Reels #F1Edits #F1Community #RaceWeekend #miamigp #ImolaGP #leclerc #hamilton #albon #penalty
+In this video, we’ll explore the most important Python functions every beginner and intermediate programmer must know! 🚀
+From basics like print() and len() to advanced functions like map() and zip(), these built-in functions will help you write clean, powerful, and efficient Python code.
+📌 What you’ll learn in this video:
+First 20 important Python functions
+How they work with simple examples
+Why every programmer should know them
+Real-world usage in coding & problem-solving
+Whether you’re preparing for coding interviews, assignments, or just starting with Python programming, this video is a must-watch!
+👉 Don’t forget to like, share, and subscribe for more Python tutorials
+python important functions, python built in functions, python tutorial, python for beginners, python tutorial for beginners, python programming, python coding, top python functions, python tips and tricks, learn python fast, python basics, python important functions for interview, python must know functions, python in 2025, python programming tutorial, python guide, python roadmap, python coding interview
+#Python #PythonFunctions #PythonTutorial #LearnPython #PythonForBeginners #PythonProgramming #Coding #Programmi...
 
 ----------------------------------------------------------------------
 
 VIDEO 3
-Title: Everything You Need To Know About the Formula 1 2026 Regulations
-Channel: FORMULA 1
-Published: 2025-12-17T13:00:35Z
-URL: https://www.youtube.com/watch?v=GaDFJr5wSz0
+Title: Python Tutorial for Beginners - Full Course (with Notes & Practice Questions)
+Channel: Apna College
+Published: 2024-02-12T14:24:29Z
+URL: https://www.youtube.com/watch?v=ERCMXc8x7mc
 
 Description:
-2026 brings with it a new breed of Formula 1 car that will see both the chassis and power units updated, in the biggest overhaul of regulations in the sport's history. Get up to speed with everything you need to know about these game-changing cars as we race into a new generation of racing!
+📌Complete AI/ML Job Ready Batch  :https://www.apnacollege.in/course/prime-ai
 
-For more F1® videos, visit: https://www.Formula1.com
+Batch starting from 15th Nov 2025
+--------------------------------------------------------------------------
 
-Visit our store: https://f1store.formula1.com/
+Link for International students : https://pages.razorpay.com/prime-ai
+(outside India students)
 
-Follow F1®:
-https://www.instagram.com/F1
-https://www.facebook.com/Formula1/
-https://www.twitter.com/F1
-https://www.twitch.tv/formula1
-https://www.tiktok.com/@f1
+Eligibility for Prime (AI/ML batch) :
+- B.Tech students preparing for Tech Placement/Internships. 
+- working professionals switching to AI roles
+- M.Tech/MCA/BCA who are preparing for Tech Placements/Internships
 
-#F1
+Class Schedule : 
+- Mentioned in video & on website. 
+- Lectures will come on weekends
+- Lecture duration : 2+ Hour
+
+Want to study for Tech Placements/Internships from us :
+Our Latest Placement Batches : https://linktr.ee/apnacollege.in
+
+Share your progress on Twitter : https://x.com/ShradhaKhapra_
+DSA Series full playlist : https://www.youtube.com/playlist?list=PLfqMhTWNBTe137I_EPQd34TsgV6IO55pt
+
+Notes of Python Tutorial: https://drive.google.com/drive/folders/1LahwPSc6f9nkxBiRrz6LFUzkrg-Kzvov
+
+TimeStamps 
+00:00:00 - Introduction
+00:02:03 - Variables and Data Types
+02:32:16 - Strings and conditional statements
+03:27:13 - Lists and Tuples
+04:08:03 - Dictionary and Set
+05:01:26 - Loops
+06:04:25 ...
+
+----------------------------------------------------------------------
+
+VIDEO 4
+Title: Learn Python - Full Course for Beginners [Tutorial]
+Channel: freeCodeCamp.org
+Published: 2018-07-11T18:00:42Z
+URL: https://www.youtube.com/watch?v=rfscVS0vtbw
+
+Description:
+This course will give you a full introduction into all of the core concepts in python. Follow along with the videos and you'll be a python programmer in no time!
+
+Click the ⚙️ to change to a dub track in Spanish, Arabic, or Portuguese, or Hindi. 
+(Hindi dubbed via Melt Labs - https://www.withmelt.com/)
+
+❤️ Try interactive Python courses we love, right in your browser: https://scrimba.com/freeCodeCamp-Python (Made possible by a grant from our friends at Scrimba)
+
+⭐️ Contents ⭐
+⌨️ (0:00) Introduction
+⌨️ (1:45) Installing Python & PyCharm
+⌨️ (6:40) Setup & Hello World
+⌨️ (10:23) Drawing a Shape
+⌨️ (15:06) Variables & Data Types
+⌨️ (27:03) Working With Strings
+⌨️ (38:18) Working With Numbers
+⌨️ (48:26) Getting Input From Users
+⌨️ (52:37) Building a Basic Calculator
+⌨️ (58:27) Mad Libs Game
+⌨️ (1:03:10) Lists
+⌨️ (1:10:44) List Functions
+⌨️ (1:18:57) Tuples
+⌨️ (1:24:15) Functions
+⌨️ (1:34:11) Return Statement
+⌨️ (1:40:06) If Statements
+⌨️ (1:54:07) If Statements & Comparisons
+⌨️ (2:00:37) Building a better Calculator
+⌨️ (2:07:17) Dictionaries
+⌨️ (2:14:13) While Loop
+⌨️ (2:20:21) Building a Guessing Game
+⌨️ (2:32:44) For Loops
+⌨️ (2:41:20) Exponent Function
+⌨️ (2:47:13) 2D Lists & Nested ...
+
+----------------------------------------------------------------------
+
+VIDEO 5
+Title: Python for Beginners - Learn Coding with Python in 1 Hour
+Channel: Programming with Mosh
+Published: 2020-09-16T13:00:20Z
+URL: https://www.youtube.com/watch?v=kqtD5dpn9C8
+
+Description:
+Learn Python basics in just 1 hour! Perfect for beginners interested in AI and coding. ⚡ Plus, get 6 months of PyCharm FREE with the coupon in the description!
+
+🚀 Want to dive deeper? Check out my Complete Python Mastery course: 
+- Full course: https://mosh.link/python-course
+- Subscribe for more Python tutorials like this: https://goo.gl/6PYaGF
+
+📕 Get the FREE goodies:
+- Python cheat sheet: https://mosh.link/python-cheatsheet
+- Get 6 months of PyCharm for free with this coupon code: MOSH_YOUTUBE - Redeem it at: https://jb.gg/redeem
+
+✋ Stay connected:
+- Twitter: https://twitter.com/moshhamedani
+- Facebook: https://www.facebook.com/programmingwithmosh/
+- Instagram: https://www.instagram.com/codewithmosh.official/
+- LinkedIn: https://www.linkedin.com/school/codewithmosh/
+
+⭐ Related tutorials
+https://youtu.be/yVl_G-F7m8c?si=11emtFyDccTKCGn7
+
+📖 TABLE OF CONTENT
+0:00:00 Introduction 
+0:00:30 What You Can Do With Python 
+0:01:15 Your First Python Program 
+0:05:30 Variables
+0:09:08 Receiving Input
+0:10:48 Type Conversion
+0:18:49 Strings
+0:23:41 Arithmetic Operators 
+0:25:59 Operator Precedence 
+0:27:11 Comparison Operators 
+0:28:52 Logical Operators
+0:31:06 If Statements
+0:36:16 Exercise
+...
 
 ----------------------------------------------------------------------

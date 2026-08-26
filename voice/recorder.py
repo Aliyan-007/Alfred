@@ -8,34 +8,126 @@ import soundfile as sf
 SAMPLE_RATE = 16000
 CHANNELS = 1
 
-# Lower this if your microphone is quiet.
 ENERGY_THRESHOLD = 0.015
-
-# Shorter = faster response after you stop talking.
 SILENCE_DURATION = 0.75
-
-# Maximum length of one recording.
 MAX_RECORDING_SECONDS = 30
-
-# Maximum time waiting for you to start talking.
 START_TIMEOUT = 8
 
 
+# =========================================================
+# MICROPHONE DETECTION
+# =========================================================
+
+def find_microphone():
+
+    devices = sd.query_devices()
+
+    candidates = []
+
+    for index, device in enumerate(devices):
+
+        if device["max_input_channels"] > 0:
+
+            candidates.append(
+                (
+                    index,
+                    device["name"],
+                )
+            )
+
+    if not candidates:
+
+        raise RuntimeError(
+            "No microphone device found."
+        )
+
+    # Prefer headset / hands-free microphones.
+    preferred_words = [
+        "hands-free",
+        "headset",
+        "microphone",
+        "mic",
+    ]
+
+    for word in preferred_words:
+
+        for index, name in candidates:
+
+            if word in name.lower():
+
+                print(
+                    f"Using microphone [{index}]: {name}",
+                    flush=True,
+                )
+
+                return index
+
+    # Try Windows default input.
+    default_input = sd.default.device[0]
+
+    if (
+        default_input is not None
+        and default_input >= 0
+        and default_input < len(devices)
+    ):
+
+        print(
+            f"Using default microphone "
+            f"[{default_input}]: "
+            f"{devices[default_input]['name']}",
+            flush=True,
+        )
+
+        return default_input
+
+    # Final fallback.
+    index, name = candidates[0]
+
+    print(
+        f"Using available microphone "
+        f"[{index}]: {name}",
+        flush=True,
+    )
+
+    return index
+
+
+# =========================================================
+# AUDIO LEVEL
+# =========================================================
+
 def get_rms(audio):
-    """Calculate the volume level of an audio chunk."""
-    return float(np.sqrt(np.mean(np.square(audio))))
+
+    return float(
+        np.sqrt(
+            np.mean(
+                np.square(audio)
+            )
+        )
+    )
 
 
-def record_audio(output_file="voice_input.wav"):
-    """
-    Wait for speech, then record until the user stops speaking.
-    """
+# =========================================================
+# RECORD AUDIO
+# =========================================================
+
+def record_audio(
+    output_file="voice_input.wav",
+):
+
+    microphone = find_microphone()
 
     print()
-    print("Listening...", flush=True)
+    print(
+        "Listening...",
+        flush=True,
+    )
 
     chunk_duration = 0.05
-    chunk_size = int(SAMPLE_RATE * chunk_duration)
+
+    chunk_size = int(
+        SAMPLE_RATE * chunk_duration
+    )
 
     recorded_chunks = []
 
@@ -45,6 +137,7 @@ def record_audio(output_file="voice_input.wav"):
     total_time = 0.0
 
     with sd.InputStream(
+        device=microphone,
         samplerate=SAMPLE_RATE,
         channels=CHANNELS,
         dtype="float32",
@@ -53,9 +146,12 @@ def record_audio(output_file="voice_input.wav"):
 
         while True:
 
-            audio_chunk, overflowed = stream.read(chunk_size)
+            audio_chunk, overflowed = stream.read(
+                chunk_size
+            )
 
             if overflowed:
+
                 print(
                     "Warning: microphone buffer overflow.",
                     flush=True,
@@ -63,9 +159,19 @@ def record_audio(output_file="voice_input.wav"):
 
             audio_chunk = audio_chunk.copy()
 
-            volume = get_rms(audio_chunk)
+            volume = get_rms(
+                audio_chunk
+            )
 
             total_time += chunk_duration
+
+            # Debug volume display
+            if volume > 0.003:
+
+                print(
+                    f"Mic level: {volume:.4f}",
+                    flush=True,
+                )
 
             # --------------------------------------------
             # WAIT FOR USER TO START SPEAKING
@@ -77,8 +183,17 @@ def record_audio(output_file="voice_input.wav"):
 
                 if volume >= ENERGY_THRESHOLD:
 
+                    print(
+                        "Speech detected.",
+                        flush=True,
+                    )
+
                     speech_started = True
-                    recorded_chunks.append(audio_chunk)
+
+                    recorded_chunks.append(
+                        audio_chunk
+                    )
+
                     silence_time = 0.0
 
                 elif waiting_time >= START_TIMEOUT:
@@ -93,10 +208,12 @@ def record_audio(output_file="voice_input.wav"):
                 continue
 
             # --------------------------------------------
-            # USER IS SPEAKING
+            # RECORD SPEECH
             # --------------------------------------------
 
-            recorded_chunks.append(audio_chunk)
+            recorded_chunks.append(
+                audio_chunk
+            )
 
             if volume < ENERGY_THRESHOLD:
 
@@ -115,7 +232,7 @@ def record_audio(output_file="voice_input.wav"):
                 break
 
             # --------------------------------------------
-            # SAFETY LIMIT
+            # MAXIMUM RECORDING LIMIT
             # --------------------------------------------
 
             if total_time >= MAX_RECORDING_SECONDS:
@@ -136,13 +253,11 @@ def record_audio(output_file="voice_input.wav"):
 
         return None
 
-    # Combine chunks.
     audio = np.concatenate(
         recorded_chunks,
         axis=0,
     )
 
-    # Save WAV.
     sf.write(
         output_file,
         audio,

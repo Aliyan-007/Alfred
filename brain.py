@@ -18,6 +18,85 @@ from tools.ai_tools import (
     execute_tool,
 )
 
+from hub.device_executor import (
+    execute_device_command,
+)
+
+# =========================================================
+# DEVICE / LOCAL TOOL EXECUTION
+# =========================================================
+
+REMOTE_DEVICE_TOOLS = {
+    "ping",
+
+    "open_application",
+
+    "open_url",
+    "web_search",
+
+    "play_spotify",
+    "spotify_control",
+
+    "play_youtube",
+    "youtube_control",
+
+    "pc_volume_up",
+    "pc_volume_down",
+    "pc_volume_mute",
+    "pc_volume_unmute",
+
+    "draft_email",
+    "send_pending_email",
+
+    "save_to_notepad",
+    "save_to_word",
+
+    "research_youtube",
+}
+
+
+def execute_alfred_tool(
+    tool_name,
+    arguments,
+):
+
+    if tool_name in REMOTE_DEVICE_TOOLS:
+
+        print(
+            f"[ALFRED] Routing tool through device: "
+            f"{tool_name}"
+        )
+
+        result = execute_device_command(
+            tool_name,
+            arguments,
+        )
+
+        if result.get(
+            "success"
+        ):
+
+            return result.get(
+                "result"
+            )
+
+        return (
+            result.get(
+                "error"
+            )
+            or
+            "The device could not complete that request."
+        )
+
+    print(
+        f"[ALFRED] Executing local tool: "
+        f"{tool_name}"
+    )
+
+    return execute_tool(
+        tool_name,
+        arguments,
+    )
 
 # =========================================================
 # CONFIGURATION
@@ -1647,7 +1726,7 @@ def run_model_once(
                 f"[{model} TOOL] {name}"
             )
 
-            result = execute_tool(
+            result = execute_alfred_tool(
                 name,
                 arguments,
             )
@@ -1773,7 +1852,7 @@ def run_local_brain(
                 f"[LOCAL ALFRED TOOL] {name}"
             )
 
-            result = execute_tool(
+            result = execute_alfred_tool(
                 name,
                 arguments,
             )

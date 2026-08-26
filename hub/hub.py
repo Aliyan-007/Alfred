@@ -336,6 +336,39 @@ async def handle_client(
                         "[HUB] No requester found for command:",
                         command_id,
                     )
+            # =================================================
+            # GET CONNECTED DEVICES
+            # =================================================
+
+            elif message_type == "get_devices":
+
+                devices = []
+
+                for current_device_id, device in connected_devices.items():
+
+                    devices.append(
+                        {
+                            "device_id": current_device_id,
+                            "name": device.get(
+                                "name"
+                            ),
+                            "device_type": device.get(
+                                "type"
+                            ),
+                            "capabilities": device.get(
+                                "capabilities",
+                                [],
+                            ),
+                        }
+                    )
+
+                await send_json(
+                    websocket,
+                    {
+                        "type": "devices",
+                        "devices": devices,
+                    },
+                )
 
             # =================================================
             # UNKNOWN MESSAGE
