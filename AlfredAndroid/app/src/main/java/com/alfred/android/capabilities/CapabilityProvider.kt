@@ -10,24 +10,92 @@ import com.alfred.android.capabilities.calendar.CalendarCapability
 import com.alfred.android.capabilities.clipboard.ClipboardCapability
 import com.alfred.android.capabilities.media.MediaCapability
 import com.alfred.android.capabilities.notifications.NotificationCapability
+import com.alfred.android.capabilities.phone.PhoneCapability
+import com.alfred.android.capabilities.settings.SettingsCapability
 import com.alfred.android.capabilities.shortcuts.ShortcutCapability
 import com.alfred.android.capabilities.volume.HardwareCapability
 import com.alfred.android.capabilities.volume.VolumeCapability
 
+
 object CapabilityProvider {
-    fun populate(registry: CapabilityRegistry) {
-        registry.register(BatteryCapability())
-        registry.register(DeviceInfoCapability())
-        registry.register(AppCapability())
-        registry.register(UrlCapability())
-        registry.register(MediaCapability())
-        registry.register(VolumeCapability())
-        registry.register(HardwareCapability())
-        registry.register(NotificationCapability())
-        registry.register(CalendarCapability())
-        registry.register(AlarmCapability())
-        registry.register(ClipboardCapability())
-        registry.register(ShortcutCapability())
-        registry.register(AccessibilityCapability())
+
+    fun populate(
+        registry: CapabilityRegistry
+    ) {
+
+        // Battery
+        registry.register(
+            BatteryCapability()
+        )
+
+        // Device information
+        registry.register(
+            DeviceInfoCapability()
+        )
+
+        // Open and list applications
+        registry.register(
+            AppCapability()
+        )
+
+        // Open websites and URLs
+        registry.register(
+            UrlCapability()
+        )
+
+        // Phone, dialer and SMS
+        registry.register(
+            PhoneCapability()
+        )
+
+        // Media controls
+        registry.register(
+            MediaCapability()
+        )
+
+        // Volume controls
+        registry.register(
+            VolumeCapability()
+        )
+
+        // Flashlight, vibration and hardware
+        registry.register(
+            HardwareCapability()
+        )
+
+        // Android system settings
+        registry.register(
+            SettingsCapability()
+        )
+
+        // Notifications
+        registry.register(
+            NotificationCapability()
+        )
+
+        // Calendar
+        registry.register(
+            CalendarCapability()
+        )
+
+        // Alarms
+        registry.register(
+            AlarmCapability()
+        )
+
+        // Clipboard
+        registry.register(
+            ClipboardCapability()
+        )
+
+        // Custom shortcuts and workflows
+        registry.register(
+            ShortcutCapability()
+        )
+
+        // Accessibility controls
+        registry.register(
+            AccessibilityCapability()
+        )
     }
 }

@@ -1,6 +1,8 @@
 package com.alfred.android.service
 
 import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
@@ -8,12 +10,13 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+
 import com.alfred.android.AlfredApplication
 import com.alfred.android.MainActivity
 import com.alfred.android.R
 import com.alfred.android.agent.AlfredAgent
 import com.alfred.android.util.Constants
-import com.alfred.android.util.Logger
+
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,75 +24,421 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
+
 class AlfredAgentService : Service() {
-    private val tag = "ALFRED-Service"
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    private val serviceScope =
+        CoroutineScope(
+            SupervisorJob() +
+                Dispatchers.IO
+        )
+
     private lateinit var agent: AlfredAgent
 
+    private var started = false
+
+
     override fun onCreate() {
+
         super.onCreate()
-        val app = applicationContext as AlfredApplication
-        agent = app.container.agent
+
+        val app =
+            applicationContext
+                as AlfredApplication
+
+        agent =
+            app.container.agent
+
+        ensureNotificationChannel()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_STOP) { stopAgent(); stopForeground(STOP_FOREGROUND_REMOVE); stopSelf(); return START_NOT_STICKY }
-        startAgent()
+
+    override fun onStartCommand(
+        intent: Intent?,
+        flags: Int,
+        startId: Int,
+    ): Int {
+
+        if (
+            intent?.action == ACTION_STOP
+        ) {
+
+            stopAgent()
+
+            stopForeground(
+                STOP_FOREGROUND_REMOVE
+            )
+
+            stopSelf()
+
+            return START_NOT_STICKY
+        }
+
+
+        startForeground(
+            Constants.NOTIF_ID_CONNECTION,
+            buildNotification(
+                "Starting ALFRED..."
+            )
+        )
+
+
+        if (
+            !started
+        ) {
+
+            started = true
+
+            startAgent()
+        }
+
+
         return START_STICKY
     }
 
+
     private fun startAgent() {
-        startForeground(Constants.NOTIF_ID_CONNECTION, buildNotification(ConnectionState.DISCONNECTED, "Starting…"))
-        val app = applicationContext as AlfredApplication
-        scope.launch {
-            app.container.settingsRepository.settings.collectLatest { s ->
-                if (s.hubUrl.isBlank()) { updateNotification(ConnectionState.DISCONNECTED, "Hub not configured"); return@collectLatest }
-                agent.start(s.hubUrl)
-            }
+
+        val app =
+            applicationContext
+                as AlfredApplication
+
+
+        serviceScope.launch {
+
+            app.container.settingsRepository
+                .settings
+                .collectLatest { settings ->
+
+                    val hubUrl =
+                        settings.hubUrl
+
+
+                    if (
+                        hubUrl.isBlank()
+                    ) {
+
+                        updateNotification(
+                            "Hub not configured"
+                        )
+
+                        return@collectLatest
+                    }
+
+
+                    updateNotification(
+                        "Connecting to ALFRED Hub..."
+                    )
+
+
+                    try {
+
+                        agent.start(
+                            hubUrl
+                        )
+
+                    } catch (
+                        error: Exception
+                    ) {
+
+                        updateNotification(
+                            "Connection error"
+                        )
+                    }
+                }
         }
-        scope.launch { agent.connectionState.collectLatest { updateNotification(it, it.displayName) } }
+
+
+        serviceScope.launch {
+
+            agent.connectionState
+                .collectLatest { state ->
+
+                    updateNotification(
+                        state.displayName
+                    )
+                }
+        }
     }
+
 
     private fun stopAgent() {
+
+        started = false
+
         agent.stop()
-        getSharedPreferences("alfred_service_prefs", Context.MODE_PRIVATE).edit().putBoolean("service_enabled", false).apply()
+
+
+        getSharedPreferences(
+            "alfred_service_prefs",
+            Context.MODE_PRIVATE,
+        )
+            .edit()
+            .putBoolean(
+                "service_enabled",
+                false,
+            )
+            .apply()
     }
 
-    override fun onDestroy() { agent.stop(); scope.cancel(); super.onDestroy() }
-    override fun onBind(intent: Intent?): IBinder? = null
 
-    private fun buildNotification(state: ConnectionState, text: String): Notification {
-        ensureChannel()
-        val open = PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java).apply { flags = Intent.FLAG_ACTIVITY_SINGLE_TOP },
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val stop = PendingIntent.getService(this, 1, Intent(this, AlfredAgentService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        return NotificationCompat.Builder(this, Constants.NOTIF_CHANNEL_CONNECTION)
-            .setContentTitle("ALFRED").setContentText(text).setSmallIcon(R.drawable.ic_stat_alfred)
-            .setOngoing(true).setContentIntent(open)
-            .addAction(0, getString(R.string.notif_action_stop), stop)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE).build()
+    override fun onDestroy() {
+
+        started = false
+
+        agent.stop()
+
+        serviceScope.cancel()
+
+        super.onDestroy()
     }
 
-    private fun updateNotification(state: ConnectionState, text: String) {
-        runCatching { (getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager).notify(Constants.NOTIF_ID_CONNECTION, buildNotification(state, text)) }
+
+    override fun onTaskRemoved(
+        rootIntent: Intent?,
+    ) {
+
+        val restartIntent =
+            Intent(
+                applicationContext,
+                AlfredAgentService::class.java,
+            )
+
+
+        if (
+            Build.VERSION.SDK_INT
+            >= Build.VERSION_CODES.O
+        ) {
+
+            applicationContext
+                .startForegroundService(
+                    restartIntent
+                )
+
+        } else {
+
+            applicationContext
+                .startService(
+                    restartIntent
+                )
+        }
+
+
+        super.onTaskRemoved(
+            rootIntent
+        )
     }
 
-    private fun ensureChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val nm = getSystemService(NOTIFICATION_SERVICE) as android.app.NotificationManager
-            nm.createNotificationChannel(android.app.NotificationChannel(
-                Constants.NOTIF_CHANNEL_CONNECTION, "ALFRED connection", android.app.NotificationManager.IMPORTANCE_LOW))
+
+    override fun onBind(
+        intent: Intent?,
+    ): IBinder? {
+
+        return null
+    }
+
+
+    private fun buildNotification(
+        text: String,
+    ): Notification {
+
+        val openIntent =
+            Intent(
+                this,
+                MainActivity::class.java,
+            ).apply {
+
+                flags =
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+
+
+        val openPendingIntent =
+            PendingIntent.getActivity(
+                this,
+                0,
+                openIntent,
+                PendingIntent.FLAG_IMMUTABLE
+                    or
+                    PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+
+
+        val stopIntent =
+            Intent(
+                this,
+                AlfredAgentService::class.java,
+            ).apply {
+
+                action =
+                    ACTION_STOP
+            }
+
+
+        val stopPendingIntent =
+            PendingIntent.getService(
+                this,
+                1,
+                stopIntent,
+                PendingIntent.FLAG_IMMUTABLE
+                    or
+                    PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+
+
+        return NotificationCompat.Builder(
+            this,
+            Constants.NOTIF_CHANNEL_CONNECTION,
+        )
+            .setContentTitle(
+                "ALFRED"
+            )
+            .setContentText(
+                text
+            )
+            .setSmallIcon(
+                R.drawable.ic_stat_alfred
+            )
+            .setOngoing(
+                true
+            )
+            .setContentIntent(
+                openPendingIntent
+            )
+            .addAction(
+                0,
+                "Stop",
+                stopPendingIntent,
+            )
+            .setForegroundServiceBehavior(
+                NotificationCompat
+                    .FOREGROUND_SERVICE_IMMEDIATE
+            )
+            .build()
+    }
+
+
+    private fun updateNotification(
+        text: String,
+    ) {
+
+        val notificationManager =
+            getSystemService(
+                NOTIFICATION_SERVICE
+            )
+                as NotificationManager
+
+
+        notificationManager.notify(
+            Constants.NOTIF_ID_CONNECTION,
+            buildNotification(
+                text
+            )
+        )
+    }
+
+
+    private fun ensureNotificationChannel() {
+
+        if (
+            Build.VERSION.SDK_INT
+            >= Build.VERSION_CODES.O
+        ) {
+
+            val notificationManager =
+                getSystemService(
+                    NOTIFICATION_SERVICE
+                )
+                    as NotificationManager
+
+
+            val channel =
+                NotificationChannel(
+                    Constants.NOTIF_CHANNEL_CONNECTION,
+                    "ALFRED Connection",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+
+                    description =
+                        "Keeps ALFRED connected to the Hub"
+                }
+
+
+            notificationManager
+                .createNotificationChannel(
+                    channel
+                )
         }
     }
+
 
     companion object {
-        const val ACTION_STOP = "com.alfred.android.action.STOP"
-        fun start(context: Context) {
-            context.getSharedPreferences("alfred_service_prefs", Context.MODE_PRIVATE).edit().putBoolean("service_enabled", true).apply()
-            val i = Intent(context, AlfredAgentService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) context.startForegroundService(i) else context.startService(i)
+
+        const val ACTION_STOP =
+            "com.alfred.android.action.STOP"
+
+
+        fun start(
+            context: Context,
+        ) {
+
+            context
+                .getSharedPreferences(
+                    "alfred_service_prefs",
+                    Context.MODE_PRIVATE,
+                )
+                .edit()
+                .putBoolean(
+                    "service_enabled",
+                    true,
+                )
+                .apply()
+
+
+            val intent =
+                Intent(
+                    context,
+                    AlfredAgentService::class.java,
+                )
+
+
+            if (
+                Build.VERSION.SDK_INT
+                >= Build.VERSION_CODES.O
+            ) {
+
+                context
+                    .startForegroundService(
+                        intent
+                    )
+
+            } else {
+
+                context.startService(
+                    intent
+                )
+            }
         }
-        fun stop(context: Context) { context.startService(Intent(context, AlfredAgentService::class.java).setAction(ACTION_STOP)) }
+
+
+        fun stop(
+            context: Context,
+        ) {
+
+            val intent =
+                Intent(
+                    context,
+                    AlfredAgentService::class.java,
+                ).apply {
+
+                    action =
+                        ACTION_STOP
+                }
+
+
+            context.startService(
+                intent
+            )
+        }
     }
 }

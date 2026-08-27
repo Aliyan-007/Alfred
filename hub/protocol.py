@@ -79,11 +79,14 @@ ALLOWED_ACTIONS = {
 
 
     # =====================================================
-    # ANDROID — DEVICE
+    # ANDROID — BATTERY / DEVICE
     # =====================================================
 
     "battery",
+    "battery.status",
+
     "device_info",
+    "device_info.status",
 
 
     # =====================================================
@@ -91,7 +94,10 @@ ALLOWED_ACTIONS = {
     # =====================================================
 
     "apps.list",
+    "apps.open",
     "apps.open_app",
+    "apps.close",
+    "apps.current",
 
 
     # =====================================================
@@ -102,16 +108,32 @@ ALLOWED_ACTIONS = {
 
 
     # =====================================================
+    # ANDROID — PHONE
+    # =====================================================
+
+    "phone.dial",
+    "phone.call",
+    "phone.sms",
+    "phone.message",
+
+
+    # =====================================================
     # ANDROID — MEDIA
     # =====================================================
 
     "media.play",
+    "media.resume",
     "media.pause",
+    "media.play_pause",
+    "media.toggle",
     "media.next",
+    "media.skip",
     "media.previous",
+    "media.prev",
     "media.stop",
     "media.fast_forward",
     "media.rewind",
+    "media.status",
 
 
     # =====================================================
@@ -123,6 +145,7 @@ ALLOWED_ACTIONS = {
     "volume.down",
     "volume.set",
     "volume.mute",
+    "volume.unmute",
 
 
     # =====================================================
@@ -131,7 +154,30 @@ ALLOWED_ACTIONS = {
 
     "hardware.flashlight_on",
     "hardware.flashlight_off",
+    "hardware.torch_on",
+    "hardware.torch_off",
     "hardware.vibrate",
+    "hardware.brightness",
+    "hardware.status",
+
+
+    # =====================================================
+    # ANDROID — SETTINGS
+    # =====================================================
+
+    "settings.wifi_on",
+    "settings.wifi_off",
+    "settings.enable_wifi",
+    "settings.disable_wifi",
+
+    "settings.bluetooth_on",
+    "settings.bluetooth_off",
+    "settings.enable_bluetooth",
+    "settings.disable_bluetooth",
+
+    "settings.airplane_mode",
+    "settings.brightness",
+    "settings.status",
 
 
     # =====================================================
@@ -139,6 +185,9 @@ ALLOWED_ACTIONS = {
     # =====================================================
 
     "notifications.list",
+    "notifications.read",
+    "notifications.clear",
+    "notifications.status",
 
 
     # =====================================================
@@ -150,11 +199,17 @@ ALLOWED_ACTIONS = {
     "calendar.create",
     "calendar.reschedule",
     "calendar.cancel",
+    "calendar.delete",
 
 
     # =====================================================
     # ANDROID — ALARMS / TIMERS
     # =====================================================
+
+    "alarms.set",
+    "alarms.create",
+    "alarms.list",
+    "alarms.cancel",
 
     "alarms.set_alarm",
     "alarms.set_timer",
@@ -166,6 +221,7 @@ ALLOWED_ACTIONS = {
 
     "clipboard.get",
     "clipboard.set",
+    "clipboard.clear",
 
 
     # =====================================================
@@ -174,6 +230,8 @@ ALLOWED_ACTIONS = {
 
     "shortcuts.list",
     "shortcuts.run",
+    "shortcuts.create",
+    "shortcuts.delete",
 
 
     # =====================================================
@@ -182,10 +240,13 @@ ALLOWED_ACTIONS = {
 
     "accessibility.back",
     "accessibility.home",
+    "accessibility.recents",
     "accessibility.tap",
     "accessibility.swipe",
     "accessibility.click_text",
+    "accessibility.status",
 }
+
 
 # =========================================================
 # CREATE COMMAND
@@ -239,13 +300,19 @@ def create_command(
 
 
     return {
-        "id": (
-            "cmd_"
-            + uuid.uuid4().hex
-        ),
-        "device": device_id,
-        "action": action,
-        "parameters": parameters,
+
+        "id":
+            "cmd_" + uuid.uuid4().hex,
+
+        "device":
+            device_id,
+
+        "action":
+            action,
+
+        "parameters":
+            parameters,
+
     }
 
 
@@ -269,10 +336,15 @@ def validate_command(
 
 
     required_fields = (
+
         "id",
+
         "device",
+
         "action",
+
         "parameters",
+
     )
 
 
@@ -281,8 +353,11 @@ def validate_command(
         if field not in command:
 
             return (
+
                 False,
+
                 f"Missing field: {field}",
+
             )
 
 
@@ -292,8 +367,11 @@ def validate_command(
     ):
 
         return (
+
             False,
+
             "id must be a string.",
+
         )
 
 
@@ -303,8 +381,11 @@ def validate_command(
     ):
 
         return (
+
             False,
+
             "device must be a string.",
+
         )
 
 
@@ -314,17 +395,23 @@ def validate_command(
     ):
 
         return (
+
             False,
+
             "action must be a string.",
+
         )
 
 
     if command["action"] not in ALLOWED_ACTIONS:
 
         return (
+
             False,
+
             f"Unsupported action: "
             f"{command['action']}",
+
         )
 
 
@@ -334,12 +421,18 @@ def validate_command(
     ):
 
         return (
+
             False,
+
             "parameters must be a dictionary.",
+
         )
 
 
     return (
+
         True,
+
         "OK",
+
     )

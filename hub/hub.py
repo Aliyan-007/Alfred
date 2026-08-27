@@ -21,8 +21,6 @@ PORT = 8765
 connected_devices = {}
 
 # Maps command_id -> originating websocket.
-# This allows the Hub to return a device result to the
-# client that originally requested the command.
 pending_commands = {}
 
 
@@ -34,9 +32,15 @@ async def send_json(
     websocket,
     data,
 ):
+
     message = json.dumps(
         data,
         ensure_ascii=False,
+    )
+
+    print(
+        "[HUB] Sending:",
+        message,
     )
 
     await websocket.send(
@@ -51,18 +55,27 @@ async def send_json(
 async def handle_client(
     websocket,
 ):
+
     device_id = None
 
+    print()
     print(
-        "[HUB] Client connected."
+        "[HUB] Client connected:",
+        id(websocket),
     )
 
     try:
 
         async for message in websocket:
 
+            print()
             print(
-                f"[HUB] Received: {message}"
+                f"[HUB] Received from "
+                f"{device_id or 'unregistered'}:"
+            )
+
+            print(
+                message
             )
 
             # -------------------------------------------------
@@ -81,13 +94,12 @@ async def handle_client(
                     websocket,
                     {
                         "type": "error",
-                        "message": (
-                            "Invalid JSON."
-                        ),
+                        "message": "Invalid JSON.",
                     },
                 )
 
                 continue
+
 
             if not isinstance(
                 data,
@@ -99,16 +111,19 @@ async def handle_client(
                     {
                         "type": "error",
                         "message": (
-                            "Message must be a JSON object."
+                            "Message must be "
+                            "a JSON object."
                         ),
                     },
                 )
 
                 continue
 
+
             message_type = data.get(
                 "type"
             )
+
 
             # =================================================
             # REGISTER DEVICE
@@ -122,6 +137,7 @@ async def handle_client(
                     )
                     or ""
                 ).strip()
+
 
                 if not device_id:
 
@@ -137,30 +153,86 @@ async def handle_client(
 
                     continue
 
-                # If the same device ID was previously
-                # connected through another socket, replace it.
+
+                # If another connection already exists
+                # for this device, show it clearly.
+                old_device = (
+                    connected_devices.get(
+                        device_id
+                    )
+                )
+
+                if old_device:
+
+                    print()
+                    print(
+                        "[HUB] WARNING: Replacing "
+                        "existing device connection:"
+                    )
+
+                    print(
+                        "[HUB] Device:",
+                        device_id,
+                    )
+
+                    print(
+                        "[HUB] Old socket:",
+                        id(
+                            old_device[
+                                "websocket"
+                            ]
+                        ),
+                    )
+
+                    print(
+                        "[HUB] New socket:",
+                        id(
+                            websocket
+                        ),
+                    )
+
+
                 connected_devices[
                     device_id
                 ] = {
                     "websocket": websocket,
+
                     "name": data.get(
                         "name",
                         device_id,
                     ),
+
                     "type": data.get(
                         "device_type",
                         "unknown",
                     ),
+
                     "capabilities": data.get(
                         "capabilities",
                         [],
                     ),
                 }
 
+
+                print()
                 print(
                     "[HUB] Registered device:",
                     device_id,
                 )
+
+                print(
+                    "[HUB] WebSocket:",
+                    id(websocket),
+                )
+
+                print(
+                    "[HUB] Capabilities:",
+                    data.get(
+                        "capabilities",
+                        [],
+                    ),
+                )
+
 
                 await send_json(
                     websocket,
@@ -170,11 +242,14 @@ async def handle_client(
                     },
                 )
 
+                continue
+
+
             # =================================================
             # PING
             # =================================================
 
-            elif message_type == "ping":
+            if message_type == "ping":
 
                 await send_json(
                     websocket,
@@ -183,19 +258,46 @@ async def handle_client(
                     },
                 )
 
+                continue
+
+
             # =================================================
             # ROUTE COMMAND
             # =================================================
 
-            elif message_type == "command":
+            if message_type == "command":
 
                 command = data.get(
                     "command"
                 )
 
+
+                print()
+                print(
+                    "=" * 60
+                )
+
+                print(
+                    "[HUB] COMMAND RECEIVED"
+                )
+
+                print(
+                    "=" * 60
+                )
+
+                print(
+                    json.dumps(
+                        command,
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+
+
                 valid, reason = validate_command(
                     command
                 )
+
 
                 if not valid:
 
@@ -210,6 +312,13 @@ async def handle_client(
                             "id"
                         )
 
+
+                    print(
+                        "[HUB] COMMAND INVALID:",
+                        reason,
+                    )
+
+
                     await send_json(
                         websocket,
                         {
@@ -222,6 +331,7 @@ async def handle_client(
 
                     continue
 
+
                 command_id = command[
                     "id"
                 ]
@@ -230,21 +340,80 @@ async def handle_client(
                     "device"
                 ]
 
+
+                print()
+
+                print(
+                    "[HUB] Command ID:",
+                    command_id,
+                )
+
+                print(
+                    "[HUB] Target device:",
+                    target_device,
+                )
+
+                print(
+                    "[HUB] Action:",
+                    command.get(
+                        "action"
+                    ),
+                )
+
+
+                print()
+
+                print(
+                    "[HUB] Connected devices:"
+                )
+
+
+                for current_id, current_device in (
+                    connected_devices.items()
+                ):
+
+                    print(
+                        "  -",
+                        current_id,
+                        "| socket:",
+                        id(
+                            current_device[
+                                "websocket"
+                            ]
+                        ),
+                    )
+
+
                 target = connected_devices.get(
                     target_device
                 )
 
+
                 if not target:
+
+                    print()
+
+                    print(
+                        "[HUB] TARGET DEVICE "
+                        "NOT FOUND:",
+                        target_device,
+                    )
+
 
                     await send_json(
                         websocket,
                         {
                             "type": "command_result",
+
                             "id": command_id,
+
                             "device": target_device,
+
                             "success": False,
+
                             "error": (
-                                f"Device '{target_device}' "
+                                f"Device "
+                                f"'{target_device}' "
                                 "is not connected."
                             ),
                         },
@@ -252,115 +421,223 @@ async def handle_client(
 
                     continue
 
-                # Remember who requested the command.
+
+                # Remember requester.
                 pending_commands[
                     command_id
                 ] = websocket
 
-                print(
-                    "[HUB] Routing command:",
-                    command,
+
+                target_socket = (
+                    target[
+                        "websocket"
+                    ]
                 )
+
+
+                print()
+
+                print(
+                    "[HUB] FORWARDING COMMAND"
+                )
+
+                print(
+                    "[HUB] From socket:",
+                    id(websocket),
+                )
+
+                print(
+                    "[HUB] To device:",
+                    target_device,
+                )
+
+                print(
+                    "[HUB] To socket:",
+                    id(target_socket),
+                )
+
 
                 try:
 
                     await send_json(
-                        target["websocket"],
+                        target_socket,
                         {
                             "type": "command",
                             "command": command,
                         },
                     )
 
+
+                    print(
+                        "[HUB] Command forwarded "
+                        "successfully."
+                    )
+
+
                 except Exception as error:
 
-                    # Remove the pending request because
-                    # delivery failed.
                     pending_commands.pop(
                         command_id,
                         None,
                     )
 
+
+                    print(
+                        "[HUB] DELIVERY FAILED:",
+                        error,
+                    )
+
+
                     await send_json(
                         websocket,
                         {
                             "type": "command_result",
+
                             "id": command_id,
+
                             "device": target_device,
+
                             "success": False,
+
                             "error": {
-                                "code": "delivery_failed",
-                                "message": str(error),
+                                "code":
+                                    "delivery_failed",
+
+                                "message":
+                                    str(error),
                             },
                         },
                     )
+
+                continue
+
 
             # =================================================
             # COMMAND RESULT
             # =================================================
 
-            elif message_type == "command_result":
+            if message_type == "command_result":
 
                 command_id = data.get(
                     "id"
                 )
 
+
+                print()
+
+                print(
+                    "[HUB] COMMAND RESULT RECEIVED"
+                )
+
+                print(
+                    "[HUB] From device:",
+                    device_id,
+                )
+
+                print(
+                    "[HUB] Command ID:",
+                    command_id,
+                )
+
+                print(
+                    "[HUB] Result:"
+                )
+
+                print(
+                    json.dumps(
+                        data,
+                        indent=2,
+                        ensure_ascii=False,
+                    )
+                )
+
+
                 if not command_id:
 
                     print(
-                        "[HUB] Command result without ID."
+                        "[HUB] Command result "
+                        "without ID."
                     )
 
                     continue
+
 
                 requester = pending_commands.pop(
                     command_id,
                     None,
                 )
 
+
                 if requester is not None:
+
+                    print()
+
+                    print(
+                        "[HUB] Returning result "
+                        "to requester."
+                    )
+
+                    print(
+                        "[HUB] Requester socket:",
+                        id(requester),
+                    )
+
 
                     await send_json(
                         requester,
                         data,
                     )
 
-                    print(
-                        "[HUB] Returned result for command:",
-                        command_id,
-                    )
-
                 else:
 
+                    print()
+
                     print(
-                        "[HUB] No requester found for command:",
+                        "[HUB] WARNING: No requester "
+                        "found for command:",
                         command_id,
                     )
+
+                continue
+
+
             # =================================================
             # GET CONNECTED DEVICES
             # =================================================
 
-            elif message_type == "get_devices":
+            if message_type == "get_devices":
 
                 devices = []
 
-                for current_device_id, device in connected_devices.items():
+
+                for (
+                    current_device_id,
+                    device,
+                ) in connected_devices.items():
 
                     devices.append(
                         {
-                            "device_id": current_device_id,
-                            "name": device.get(
-                                "name"
-                            ),
-                            "device_type": device.get(
-                                "type"
-                            ),
-                            "capabilities": device.get(
-                                "capabilities",
-                                [],
-                            ),
+                            "device_id":
+                                current_device_id,
+
+                            "name":
+                                device.get(
+                                    "name"
+                                ),
+
+                            "device_type":
+                                device.get(
+                                    "type"
+                                ),
+
+                            "capabilities":
+                                device.get(
+                                    "capabilities",
+                                    [],
+                                ),
                         }
                     )
+
 
                 await send_json(
                     websocket,
@@ -370,41 +647,59 @@ async def handle_client(
                     },
                 )
 
+                continue
+
+
             # =================================================
             # UNKNOWN MESSAGE
             # =================================================
 
-            else:
+            print()
 
-                await send_json(
-                    websocket,
-                    {
-                        "type": "error",
-                        "message": (
-                            f"Unknown message type: "
-                            f"{message_type}"
-                        ),
-                    },
-                )
+            print(
+                "[HUB] UNKNOWN MESSAGE TYPE:",
+                message_type,
+            )
+
+
+            await send_json(
+                websocket,
+                {
+                    "type": "error",
+
+                    "message": (
+                        f"Unknown message type: "
+                        f"{message_type}"
+                    ),
+                },
+            )
+
 
     except websockets.exceptions.ConnectionClosed:
 
+        print()
+
         print(
-            "[HUB] Client disconnected."
+            "[HUB] Client disconnected:",
+            device_id,
         )
 
+
     except Exception as error:
+
+        print()
 
         print(
             "[HUB] Client error:",
             error,
         )
 
+
     finally:
 
         # -----------------------------------------------------
-        # Remove device registration only if this websocket
-        # is still the active connection for that device.
+        # Remove registration only if this exact socket
+        # is still the registered socket.
         # -----------------------------------------------------
 
         if device_id:
@@ -412,6 +707,7 @@ async def handle_client(
             existing = connected_devices.get(
                 device_id
             )
+
 
             if (
                 existing
@@ -425,21 +721,31 @@ async def handle_client(
                     device_id
                 ]
 
-            print(
-                "[HUB] Device offline:",
-                device_id,
-            )
+
+                print()
+
+                print(
+                    "[HUB] Device offline:",
+                    device_id,
+                )
+
 
         # -----------------------------------------------------
-        # Clean up commands that were waiting on this
-        # disconnected requester.
+        # Remove stale pending commands.
         # -----------------------------------------------------
 
         stale_command_ids = [
+
             command_id
-            for command_id, requester in pending_commands.items()
+
+            for command_id, requester in (
+                pending_commands.items()
+            )
+
             if requester is websocket
+
         ]
+
 
         for command_id in stale_command_ids:
 
@@ -456,20 +762,26 @@ async def handle_client(
 async def main():
 
     print()
+
     print(
         "=" * 60
     )
+
     print(
         "                 ALFRED HUB"
     )
+
     print(
         "=" * 60
     )
+
     print()
 
     print(
-        f"[HUB] Listening on ws://{HOST}:{PORT}"
+        f"[HUB] Listening on "
+        f"ws://{HOST}:{PORT}"
     )
+
 
     async with websockets.serve(
         handle_client,
@@ -499,6 +811,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
 
         print()
+
         print(
             "[HUB] Shutdown."
         )
