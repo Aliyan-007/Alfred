@@ -241,6 +241,7 @@ ALLOWED_ACTIONS = {
     "accessibility.back",
     "accessibility.home",
     "accessibility.recents",
+    "accessibility.recents",
     "accessibility.tap",
     "accessibility.swipe",
     "accessibility.click_text",
