@@ -10,6 +10,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.alfred.android.AlfredApplication
 import com.alfred.android.agent.LogEntry
+import com.alfred.android.agent.LogLevel
 import com.alfred.android.capabilities.accessibility.AccessibilityState
 import com.alfred.android.capabilities.notifications.NotificationState
 import com.alfred.android.events.BatteryEventReceiver
@@ -19,10 +20,13 @@ import com.alfred.android.permissions.AlfredPermissions
 import com.alfred.android.registry.DeviceIdentity
 import com.alfred.android.service.AlfredAgentService
 import com.alfred.android.service.ConnectionState
+import com.alfred.android.storage.ConnectionSettings
 import com.alfred.android.ui.dashboard.CapabilityStatus
 import com.alfred.android.ui.dashboard.DashboardUiState
 import com.alfred.android.ui.dashboard.PermissionStatus
 import com.alfred.android.util.DeviceInfo
+import com.alfred.android.voice.LocalCommandProcessor
+import com.alfred.android.voice.VoiceAssistant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -32,87 +36,684 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-class DashboardViewModel(application: Application) : AndroidViewModel(application) {
-    private val app = application as AlfredApplication
-    private val agent = app.container.agent
-    private val identity = DeviceIdentity(application)
-    private val settingsRepository = app.container.settingsRepository
-    private val servicePrefs = application.getSharedPreferences("alfred_service_prefs", Context.MODE_PRIVATE)
-    private val batteryReceiver = BatteryEventReceiver(identity.deviceId)
+class DashboardViewModel(
+    application: Application
+) : AndroidViewModel(application) {
 
-    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
-    val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
-    private val _serviceRunning = MutableStateFlow(servicePrefs.getBoolean("service_enabled", false))
+    private val app =
+        application as AlfredApplication
 
-    val uiState: StateFlow<DashboardUiState> = combine(
-        agent.connectionState, agent.authenticated, agent.paired,
-        agent.lastCommand, agent.lastResult, _serviceRunning, settingsRepository.settings,
-    ) { values ->
-        @Suppress("UNCHECKED_CAST")
-        buildState(
-            conn = values[0] as ConnectionState, authed = values[1] as Boolean, paired = values[2] as Boolean,
-            lastCmd = values[3] as String?, lastRes = values[4] as String?,
-            svc = values[5] as Boolean, settings = values[6] as com.alfred.android.storage.ConnectionSettings,
+    private val agent =
+        app.container.agent
+
+    private val identity =
+        DeviceIdentity(app)
+
+    private val settingsRepository =
+        app.container.settingsRepository
+
+    private val servicePrefs =
+        app.getSharedPreferences(
+            "alfred_service_prefs",
+            Context.MODE_PRIVATE
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
+
+    private val batteryReceiver =
+        BatteryEventReceiver(identity.deviceId)
+
+    private val commandProcessor =
+        LocalCommandProcessor(
+            context = app,
+            agent = agent
+        )
+
+    private var voiceAssistant: VoiceAssistant? =
+        null
+
+    private val _voiceListening =
+        MutableStateFlow(false)
+
+    private val _lastVoiceText =
+        MutableStateFlow("")
+
+    private val _voiceStatus =
+        MutableStateFlow("Ready")
+
+    private val _logs =
+        MutableStateFlow<List<LogEntry>>(emptyList())
+
+    val logs: StateFlow<List<LogEntry>> =
+        _logs.asStateFlow()
+
+    private val _serviceRunning =
+        MutableStateFlow(
+            servicePrefs.getBoolean(
+                "service_enabled",
+                false
+            )
+        )
+
+    val uiState: StateFlow<DashboardUiState> =
+        combine(
+            agent.connectionState,
+            agent.authenticated,
+            agent.paired,
+            agent.lastCommand,
+            agent.lastResult,
+            _serviceRunning,
+            settingsRepository.settings,
+            _voiceListening,
+            _lastVoiceText,
+            _voiceStatus
+        ) { values ->
+
+            @Suppress("UNCHECKED_CAST")
+            buildState(
+                connectionState =
+                    values[0] as ConnectionState,
+
+                authenticated =
+                    values[1] as Boolean,
+
+                paired =
+                    values[2] as Boolean,
+
+                lastCommand =
+                    values[3] as String?,
+
+                lastResult =
+                    values[4] as String?,
+
+                serviceRunning =
+                    values[5] as Boolean,
+
+                settings =
+                    values[6] as ConnectionSettings,
+
+                voiceListening =
+                    values[7] as Boolean,
+
+                lastVoiceText =
+                    values[8] as String,
+
+                voiceStatus =
+                    values[9] as String
+            )
+
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = DashboardUiState()
+        )
 
     init {
-        application.registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        viewModelScope.launch {
-            agent.logs.collect { _logs.update { l -> (l + it).takeLast(200) } }
+
+        createVoiceAssistant()
+
+        registerBatteryReceiver()
+
+        observeAgentLogs()
+
+        observeConnectionEvents()
+    }
+
+    private fun createVoiceAssistant() {
+
+        voiceAssistant =
+            VoiceAssistant(
+                context = app,
+
+                onListeningChanged = { listening ->
+
+                    _voiceListening.value =
+                        listening
+
+                    _voiceStatus.value =
+                        if (listening) {
+                            "Listening..."
+                        } else {
+                            "Ready"
+                        }
+                },
+
+                onResult = { text ->
+
+                    _lastVoiceText.value =
+                        text
+
+                    _voiceStatus.value =
+                        "Processing..."
+
+                    executeVoiceCommand(
+                        text
+                    )
+                },
+
+                onError = { error ->
+
+                    _voiceListening.value =
+                        false
+
+                    _voiceStatus.value =
+                        error
+
+                    logError(
+                        "Voice: $error"
+                    )
+                }
+            )
+    }
+
+    fun toggleVoiceListening() {
+
+        if (_voiceListening.value) {
+
+            stopVoiceListening()
+
+        } else {
+
+            startVoiceListening()
         }
+    }
+
+    fun startVoiceListening() {
+
+        _voiceStatus.value =
+            "Starting microphone..."
+
+        voiceAssistant?.startListening()
+    }
+
+    fun stopVoiceListening() {
+
+        voiceAssistant?.stopListening()
+
+        _voiceListening.value =
+            false
+
+        _voiceStatus.value =
+            "Ready"
+    }
+
+    private fun executeVoiceCommand(
+        text: String
+    ) {
+
         viewModelScope.launch {
-            agent.connectionState.collect { s ->
-                if (s == ConnectionState.CONNECTED) DeviceEvents.emit(EventNames.DEVICE_CONNECTED, identity.deviceId)
-                else if (s == ConnectionState.DISCONNECTED) DeviceEvents.emit(EventNames.DEVICE_DISCONNECTED, identity.deviceId)
+
+            logInfo(
+                "Voice command: $text"
+            )
+
+            val response =
+                commandProcessor.execute(
+                    spokenText = text
+                )
+
+            _voiceStatus.value =
+                response
+
+            logInfo(
+                "Alfred: $response"
+            )
+
+            voiceAssistant?.speak(
+                response
+            )
+        }
+    }
+
+    private fun registerBatteryReceiver() {
+
+        app.registerReceiver(
+            batteryReceiver,
+            IntentFilter(
+                Intent.ACTION_BATTERY_CHANGED
+            )
+        )
+    }
+
+    private fun observeAgentLogs() {
+
+        viewModelScope.launch {
+
+            agent.logs.collect { entry ->
+
+                _logs.update { currentLogs ->
+
+                    (
+                        currentLogs + entry
+                    ).takeLast(200)
+                }
+            }
+        }
+    }
+
+    private fun observeConnectionEvents() {
+
+        viewModelScope.launch {
+
+            agent.connectionState.collect { state ->
+
+                when (state) {
+
+                    ConnectionState.CONNECTED -> {
+
+                        DeviceEvents.emit(
+                            EventNames.DEVICE_CONNECTED,
+                            identity.deviceId
+                        )
+                    }
+
+                    ConnectionState.DISCONNECTED -> {
+
+                        DeviceEvents.emit(
+                            EventNames.DEVICE_DISCONNECTED,
+                            identity.deviceId
+                        )
+                    }
+
+                    else -> Unit
+                }
             }
         }
     }
 
     private fun buildState(
-        conn: ConnectionState, authed: Boolean, paired: Boolean,
-        lastCmd: String?, lastRes: String?, svc: Boolean,
-        settings: com.alfred.android.storage.ConnectionSettings,
+        connectionState: ConnectionState,
+        authenticated: Boolean,
+        paired: Boolean,
+        lastCommand: String?,
+        lastResult: String?,
+        serviceRunning: Boolean,
+        settings: ConnectionSettings,
+        voiceListening: Boolean,
+        lastVoiceText: String,
+        voiceStatus: String
     ): DashboardUiState {
-        val ctx: Context = app
+
+        val context: Context =
+            app
+
         agent.refreshCapabilities()
-        val caps = agent.registry.all().map {
-            CapabilityStatus(it.id, it.displayName.replaceFirstChar { c -> c.uppercase() }, it.state.value)
-        }
-        val perms = AlfredPermissions.ALL.map { PermissionStatus(it.displayName, it.isGranted(ctx)) } + listOf(
-            PermissionStatus("Notification access", NotificationState.listenerConnected, if (!NotificationState.listenerConnected) "Disabled" else null),
-            PermissionStatus("Accessibility", AccessibilityState.connected, if (!AccessibilityState.connected) "Disabled" else null),
-        )
-        val (level, charging) = readBattery(ctx)
+
+        val capabilities =
+            agent.registry
+                .all()
+                .sortedBy {
+                    it.displayName
+                }
+                .map { capability ->
+
+                    CapabilityStatus(
+                        id =
+                            capability.id,
+
+                        displayName =
+                            capability.displayName,
+
+                        state =
+                            capability.state.value
+                    )
+                }
+
+        val permissions =
+            AlfredPermissions.ALL.map { permission ->
+
+                PermissionStatus(
+                    name =
+                        permission.displayName,
+
+                    granted =
+                        permission.isGranted(
+                            context
+                        )
+                )
+
+            } + listOf(
+
+                PermissionStatus(
+                    name =
+                        "Notification access",
+
+                    granted =
+                        NotificationState.listenerConnected,
+
+                    note =
+                        if (
+                            !NotificationState.listenerConnected
+                        ) {
+                            "Disabled"
+                        } else {
+                            null
+                        }
+                ),
+
+                PermissionStatus(
+                    name =
+                        "Accessibility",
+
+                    granted =
+                        AccessibilityState.connected,
+
+                    note =
+                        if (
+                            !AccessibilityState.connected
+                        ) {
+                            "Disabled"
+                        } else {
+                            null
+                        }
+                )
+            )
+
+        val battery =
+            readBattery(
+                context
+            )
+
         return DashboardUiState(
-            connectionState = conn, authenticated = authed, paired = paired,
-            hubUrl = settings.hubUrl, deviceId = identity.deviceId,
-            deviceName = settings.deviceName.ifBlank { DeviceInfo.defaultDisplayName() },
-            manufacturer = DeviceInfo.manufacturer, model = DeviceInfo.model,
-            androidVersion = DeviceInfo.androidVersion,
-            appVersion = app.packageManager.getPackageInfo(app.packageName, 0).versionName ?: "0.1.0",
-            batteryLevel = level, isCharging = charging, foregroundServiceRunning = svc,
-            lastCommand = lastCmd, lastResult = lastRes, capabilities = caps, permissions = perms,
+
+            connectionState =
+                connectionState,
+
+            authenticated =
+                authenticated,
+
+            paired =
+                paired,
+
+            hubUrl =
+                settings.hubUrl,
+
+            deviceId =
+                identity.deviceId,
+
+            deviceName =
+                settings.deviceName.ifBlank {
+                    DeviceInfo.defaultDisplayName()
+                },
+
+            manufacturer =
+                DeviceInfo.manufacturer,
+
+            model =
+                DeviceInfo.model,
+
+            androidVersion =
+                DeviceInfo.androidVersion,
+
+            appVersion =
+                getAppVersion(),
+
+            batteryLevel =
+                battery.first,
+
+            isCharging =
+                battery.second,
+
+            foregroundServiceRunning =
+                serviceRunning,
+
+            lastCommand =
+                lastCommand,
+
+            lastResult =
+                lastResult,
+
+            capabilities =
+                capabilities,
+
+            permissions =
+                permissions,
+
+            voiceListening =
+                voiceListening,
+
+            lastVoiceText =
+                lastVoiceText,
+
+            voiceStatus =
+                voiceStatus
         )
     }
 
-    fun startService() { servicePrefs.edit().putBoolean("service_enabled", true).apply(); _serviceRunning.value = true; AlfredAgentService.start(app) }
-    fun stopService() { servicePrefs.edit().putBoolean("service_enabled", false).apply(); _serviceRunning.value = false; AlfredAgentService.stop(app) }
-    fun testConnection() { if (uiState.value.hubUrl.isBlank()) { logError("Hub URL not configured") } else startService() }
-    fun pairWithCode(code: String) { if (!agent.sendPairRequest(code)) logError("Cannot pair: not connected. Start agent and configure Hub first.") }
-    fun revokePairing() = agent.unpair()
-    fun clearLogs() { _logs.value = emptyList() }
+    private fun getAppVersion(): String {
 
-    private fun logError(m: String) { _logs.update { it + LogEntry(System.currentTimeMillis(), com.alfred.android.agent.LogLevel.ERROR, m) } }
+        return runCatching {
 
-    private fun readBattery(context: Context): Pair<Int?, Boolean?> {
-        val i = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED)) ?: return null to null
-        val level = i.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
-        val scale = i.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
-        val pct = if (level >= 0 && scale > 0) level * 100 / scale else null
-        val status = i.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
-        return pct to (status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL)
+            app.packageManager
+                .getPackageInfo(
+                    app.packageName,
+                    0
+                )
+                .versionName
+
+        }.getOrNull()
+            ?: "0.1.0"
     }
 
-    override fun onCleared() { runCatching { app.unregisterReceiver(batteryReceiver as BroadcastReceiver) }; super.onCleared() }
+    fun startService() {
+
+        servicePrefs
+            .edit()
+            .putBoolean(
+                "service_enabled",
+                true
+            )
+            .apply()
+
+        _serviceRunning.value =
+            true
+
+        logInfo(
+            "Starting Alfred Agent..."
+        )
+
+        AlfredAgentService.start(
+            app
+        )
+    }
+
+    fun stopService() {
+
+        servicePrefs
+            .edit()
+            .putBoolean(
+                "service_enabled",
+                false
+            )
+            .apply()
+
+        _serviceRunning.value =
+            false
+
+        logInfo(
+            "Stopping Alfred Agent..."
+        )
+
+        AlfredAgentService.stop(
+            app
+        )
+    }
+
+    fun testConnection() {
+
+        val hubUrl =
+            uiState.value.hubUrl
+
+        if (hubUrl.isBlank()) {
+
+            logError(
+                "Hub URL not configured"
+            )
+
+            return
+        }
+
+        logInfo(
+            "Testing connection to Hub..."
+        )
+
+        startService()
+    }
+
+    fun pairWithCode(
+        code: String
+    ) {
+
+        if (code.isBlank()) {
+
+            logError(
+                "Pairing code is empty"
+            )
+
+            return
+        }
+
+        val sent =
+            agent.sendPairRequest(
+                code.trim()
+            )
+
+        if (!sent) {
+
+            logError(
+                "Cannot pair: not connected. Start the Agent and configure the Hub first."
+            )
+
+        } else {
+
+            logInfo(
+                "Pair request sent"
+            )
+        }
+    }
+
+    fun revokePairing() {
+
+        agent.unpair()
+
+        logInfo(
+            "Pairing revoked"
+        )
+    }
+
+    fun clearLogs() {
+
+        _logs.value =
+            emptyList()
+    }
+
+    private fun logInfo(
+        message: String
+    ) {
+
+        addLog(
+            LogLevel.INFO,
+            message
+        )
+    }
+
+    private fun logError(
+        message: String
+    ) {
+
+        addLog(
+            LogLevel.ERROR,
+            message
+        )
+    }
+
+    private fun addLog(
+        level: LogLevel,
+        message: String
+    ) {
+
+        _logs.update { currentLogs ->
+
+            (
+                currentLogs + LogEntry(
+                    ts =
+                        System.currentTimeMillis(),
+
+                    level =
+                        level,
+
+                    message =
+                        message
+                )
+            ).takeLast(200)
+        }
+    }
+
+    private fun readBattery(
+        context: Context
+    ): Pair<Int?, Boolean?> {
+
+        val intent =
+            context.registerReceiver(
+                null,
+                IntentFilter(
+                    Intent.ACTION_BATTERY_CHANGED
+                )
+            )
+                ?: return null to null
+
+        val level =
+            intent.getIntExtra(
+                BatteryManager.EXTRA_LEVEL,
+                -1
+            )
+
+        val scale =
+            intent.getIntExtra(
+                BatteryManager.EXTRA_SCALE,
+                -1
+            )
+
+        val percentage =
+            if (
+                level >= 0 &&
+                scale > 0
+            ) {
+
+                level * 100 / scale
+
+            } else {
+
+                null
+            }
+
+        val status =
+            intent.getIntExtra(
+                BatteryManager.EXTRA_STATUS,
+                -1
+            )
+
+        val charging =
+            status ==
+                BatteryManager.BATTERY_STATUS_CHARGING ||
+            status ==
+                BatteryManager.BATTERY_STATUS_FULL
+
+        return percentage to charging
+    }
+
+    override fun onCleared() {
+
+        voiceAssistant?.destroy()
+
+        voiceAssistant =
+            null
+
+        runCatching {
+
+            app.unregisterReceiver(
+                batteryReceiver as BroadcastReceiver
+            )
+        }
+
+        super.onCleared()
+    }
 }
