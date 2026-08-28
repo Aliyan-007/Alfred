@@ -1,6 +1,8 @@
 package com.alfred.android.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -123,7 +125,12 @@ fun DashboardScreen(
             Staggered(sectionIndex++) {
                 PermissionsSection(state)
             }
-
+            Staggered(sectionIndex++) {
+                VoiceSection(
+                    state = state,
+                    viewModel = viewModel
+                )
+            }
             Staggered(sectionIndex++) {
                 ActionsSection(onNavigate, viewModel)
             }
@@ -751,6 +758,156 @@ private fun ServiceSection(
 }
 
 @Composable
+private fun VoiceSection(
+    state: DashboardUiState,
+    viewModel: DashboardViewModel,
+) {
+
+    SectionCard(
+        title = "Voice Assistant",
+    ) {
+
+        Column(
+            modifier =
+                Modifier.fillMaxWidth(),
+            horizontalAlignment =
+                Alignment.CenterHorizontally,
+        ) {
+
+            Text(
+                text =
+                    state.voiceStatus,
+                style =
+                    MaterialTheme.typography.titleMedium,
+                fontWeight =
+                    FontWeight.SemiBold,
+            )
+
+            Spacer(
+                Modifier.height(8.dp),
+            )
+
+            if (
+                state.lastVoiceText.isNotBlank()
+            ) {
+
+                Text(
+                    text =
+                        "\"${state.lastVoiceText}\"",
+                    style =
+                        MaterialTheme.typography.bodyMedium,
+                    color =
+                        AlfredOnSurfaceMuted,
+                )
+
+                Spacer(
+                    Modifier.height(12.dp),
+                )
+            }
+
+            val (
+                source,
+                scale,
+            ) =
+                rememberPressScale()
+
+            OutlinedButton(
+                onClick = {
+
+                    viewModel.toggleVoiceListening()
+                },
+
+                interactionSource =
+                    source,
+
+                colors =
+                    ButtonDefaults
+                        .outlinedButtonColors(
+                            contentColor =
+                                if (
+                                    state.voiceListening
+                                ) {
+                                    MaterialTheme
+                                        .colorScheme
+                                        .error
+                                } else {
+                                    AlfredPrimary
+                                }
+                        ),
+
+                modifier =
+                    Modifier
+                        .size(
+                            width = 180.dp,
+                            height = 56.dp
+                        )
+                        .scale(scale),
+            ) {
+
+                Icon(
+                    imageVector =
+                        if (
+                            state.voiceListening
+                        ) {
+                            Icons.Filled.MicOff
+                        } else {
+                            Icons.Filled.Mic
+                        },
+
+                    contentDescription =
+                        if (
+                            state.voiceListening
+                        ) {
+                            "Stop listening"
+                        } else {
+                            "Start listening"
+                        },
+
+                    modifier =
+                        Modifier.size(26.dp),
+                )
+
+                Spacer(
+                    Modifier.width(8.dp),
+                )
+
+                Text(
+                    text =
+                        if (
+                            state.voiceListening
+                        ) {
+                            "Stop"
+                        } else {
+                            "Speak"
+                        }
+                )
+            }
+
+            Spacer(
+                Modifier.height(8.dp),
+            )
+
+            Text(
+                text =
+                    if (
+                        state.voiceListening
+                    ) {
+                        "Alfred is listening..."
+                    } else {
+                        "Tap Speak to give Alfred a command"
+                    },
+
+                style =
+                    MaterialTheme.typography.bodySmall,
+
+                color =
+                    AlfredOnSurfaceMuted,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ActionsSection(
     onNavigate: (String) -> Unit,
     viewModel: DashboardViewModel,
@@ -840,6 +997,7 @@ private fun ActionsSection(
         }
     }
 }
+
 
 @Composable
 private fun ActButton(
