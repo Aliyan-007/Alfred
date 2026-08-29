@@ -12,6 +12,7 @@ sealed class CommandIntent {
         val direction: Direction,
         val amount: Int? = null
     ) : CommandIntent() {
+
         enum class Direction {
             UP,
             DOWN
@@ -36,9 +37,21 @@ sealed class CommandIntent {
         val query: String
     ) : CommandIntent()
 
-    data class WhatsAppShare(
+    // =================================================
+    // MESSAGING
+    // =================================================
+
+    data class Message(
+        val channel: Channel,
+        val contactName: String,
         val message: String
-    ) : CommandIntent()
+    ) : CommandIntent() {
+
+        enum class Channel {
+            SMS,
+            WHATSAPP
+        }
+    }
 
     data object Greeting : CommandIntent()
 
