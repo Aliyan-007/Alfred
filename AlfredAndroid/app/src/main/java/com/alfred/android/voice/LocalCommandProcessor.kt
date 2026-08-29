@@ -3,315 +3,110 @@ package com.alfred.android.voice
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.net.Uri
 import android.os.BatteryManager
 import android.provider.Settings
 import android.widget.Toast
 import com.alfred.android.agent.AlfredAgent
+import java.net.URLEncoder
 
 class LocalCommandProcessor(
     private val context: Context,
     private val agent: AlfredAgent
 ) {
 
+    private val parser = CommandParser()
+
     suspend fun execute(
         spokenText: String
     ): String {
 
-        val command =
-            normalize(spokenText)
+        val intents = parser.parse(spokenText)
 
-        if (command.isBlank()) {
-            return "Sir, mujhe command samajh nahi aayi."
+        val responses = mutableListOf<String>()
+
+        for (intent in intents) {
+
+            val response = executeIntent(intent)
+
+            responses += response
+
+            // Stop executing after an unknown command.
+            if (intent is CommandIntent.Unknown) {
+                break
+            }
         }
 
-        return when {
-
-            // -----------------------------------------
-            // BATTERY
-            // -----------------------------------------
-
-            isBatteryCommand(command) ->
-                getBatteryResponse()
-
-            // -----------------------------------------
-            // FLASHLIGHT
-            // -----------------------------------------
-
-            isFlashlightOnCommand(command) ->
-                flashlightOn()
-
-            isFlashlightOffCommand(command) ->
-                flashlightOff()
-
-            // -----------------------------------------
-            // VOLUME
-            // -----------------------------------------
-
-            isVolumeUpCommand(command) ->
-                volumeUp()
-
-            isVolumeDownCommand(command) ->
-                volumeDown()
-
-            // -----------------------------------------
-            // SETTINGS
-            // -----------------------------------------
-
-            isOpenSettingsCommand(command) ->
-                openSettings()
-
-            // -----------------------------------------
-            // APPS
-            // -----------------------------------------
-
-            isOpenYoutubeCommand(command) ->
-                openApp(
-                    packageName = "com.google.android.youtube",
-                    appName = "YouTube"
-                )
-
-            isOpenWhatsappCommand(command) ->
-                openApp(
-                    packageName = "com.whatsapp",
-                    appName = "WhatsApp"
-                )
-
-            isOpenSpotifyCommand(command) ->
-                openApp(
-                    packageName = "com.spotify.music",
-                    appName = "Spotify"
-                )
-
-            // -----------------------------------------
-            // GREETING
-            // -----------------------------------------
-
-            isGreeting(command) ->
-                greetingResponse()
-
-            // -----------------------------------------
-            // HELP
-            // -----------------------------------------
-
-            isHelpCommand(command) ->
-                helpResponse()
-
-            // -----------------------------------------
-            // UNKNOWN
-            // -----------------------------------------
-
-            else ->
-                unknownCommand(spokenText)
-        }
+        return responses.joinToString(" ")
+            .ifBlank {
+                "Sir, mujhe command samajh nahi aayi."
+            }
     }
 
-    // =================================================
-    // NORMALIZATION
-    // =================================================
-
-    private fun normalize(
-        text: String
+    private fun executeIntent(
+        intent: CommandIntent
     ): String {
 
-        var command =
-            text
-                .lowercase()
-                .trim()
+        return when (intent) {
 
-        // -----------------------------------------
-        // Common speech recognition variations
-        // -----------------------------------------
+            CommandIntent.Battery ->
+                getBatteryResponse()
 
-        command =
-            command
-                .replace(
-                    "assalam o alaikum",
-                    "salam"
-                )
-                .replace(
-                    "assalamu alaikum",
-                    "salam"
-                )
-                .replace(
-                    "assalamualaikum",
-                    "salam"
-                )
-                .replace(
-                    "al salam alaikum",
-                    "salam"
-                )
+            is CommandIntent.Flashlight ->
+                if (intent.enabled) {
+                    flashlightOn()
+                } else {
+                    flashlightOff()
+                }
 
-        // -----------------------------------------
-        // Remove punctuation
-        // -----------------------------------------
+            is CommandIntent.Volume ->
+                changeVolume(intent)
 
-        command =
-            command.replace(
-                Regex("[,\\.?!:;]"),
-                " "
-            )
+            CommandIntent.OpenSettings ->
+                openSettings()
 
-        // -----------------------------------------
-        // Wake words
-        // -----------------------------------------
+            is CommandIntent.OpenApp ->
+                when (intent.app) {
+                    CommandIntent.App.YOUTUBE ->
+                        openApp(
+                            "com.google.android.youtube",
+                            "YouTube"
+                        )
 
-        val wakeWords =
-            listOf(
-                "hey alfred",
-                "hello alfred",
-                "hi alfred",
-                "oye alfred",
-                "ok alfred",
-                "okay alfred",
-                "alfred",
+                    CommandIntent.App.WHATSAPP ->
+                        openApp(
+                            "com.whatsapp",
+                            "WhatsApp"
+                        )
 
-                "hey friday",
-                "hello friday",
-                "hi friday",
-                "oye friday",
-                "ok friday",
-                "okay friday",
-                "friday"
-            )
+                    CommandIntent.App.SPOTIFY ->
+                        openApp(
+                            "com.spotify.music",
+                            "Spotify"
+                        )
+                }
 
-        wakeWords.forEach { wakeWord ->
+            is CommandIntent.YouTubeSearch ->
+                youtubeSearch(intent.query)
 
-            command =
-                command.replace(
-                    wakeWord,
-                    " "
-                )
+            is CommandIntent.WebSearch ->
+                webSearch(intent.query)
+
+            is CommandIntent.SpotifySearch ->
+                spotifySearch(intent.query)
+
+            is CommandIntent.WhatsAppShare ->
+                whatsappShare(intent.message)
+
+            CommandIntent.Greeting ->
+                "Ji Sir, main yahan hoon."
+
+            CommandIntent.Help ->
+                helpResponse()
+
+            is CommandIntent.Unknown ->
+                unknownCommand(intent.originalText)
         }
-
-        // -----------------------------------------
-        // Common Roman Urdu variations
-        // -----------------------------------------
-
-        command =
-            command
-                .replace(
-                    "karo na",
-                    "karo"
-                )
-                .replace(
-                    "kr do",
-                    "karo"
-                )
-                .replace(
-                    "krdo",
-                    "karo"
-                )
-                .replace(
-                    "kardo",
-                    "karo"
-                )
-                .replace(
-                    "kar do",
-                    "karo"
-                )
-                .replace(
-                    "kholo na",
-                    "kholo"
-                )
-                .replace(
-                    "khol do",
-                    "kholo"
-                )
-                .replace(
-                    "kholna",
-                    "kholo"
-                )
-                .replace(
-                    "chala do",
-                    "chalao"
-                )
-                .replace(
-                    "chalao na",
-                    "chalao"
-                )
-                .replace(
-                    "jala do",
-                    "jalao"
-                )
-                .replace(
-                    "bata do",
-                    "batao"
-                )
-                .replace(
-                    "btao",
-                    "batao"
-                )
-                .replace(
-                    "btana",
-                    "batao"
-                )
-
-        // -----------------------------------------
-        // Normalize multiple spaces
-        // -----------------------------------------
-
-        return command
-            .replace(
-                Regex("\\s+"),
-                " "
-            )
-            .trim()
-    }
-
-    // =================================================
-    // BATTERY
-    // =================================================
-
-    private fun isBatteryCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "battery",
-
-                "battery kitni",
-                "battery kitna",
-
-                "battery percentage",
-                "battery percent",
-                "battery level",
-
-                "battery kitni hai",
-                "battery kitna hai",
-
-                "charge kitna",
-                "charge kitni",
-
-                "charge kitna hai",
-                "charge kitni hai",
-
-                "phone charge",
-
-                "phone ki battery",
-                "phone ki charge",
-
-                "kitni battery",
-                "kitna battery",
-
-                "kitna charge",
-                "kitni charge",
-
-                "battery batao",
-                "battery btao",
-
-                "charge batao",
-                "charge btao",
-
-                "phone ki battery batao",
-                "phone ki battery kitni hai",
-
-                "mera charge kitna hai",
-                "meri battery kitni hai"
-            )
-        )
     }
 
     private fun getBatteryResponse(): String {
@@ -327,87 +122,10 @@ class LocalCommandProcessor(
             )
 
         return if (level >= 0) {
-
             "Sir, battery $level percent hai."
-
         } else {
-
             "Sir, main battery level read nahi kar saka."
         }
-    }
-
-    // =================================================
-    // FLASHLIGHT
-    // =================================================
-
-    private fun isFlashlightOnCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "flashlight on",
-                "flashlight chalao",
-                "flashlight jalao",
-                "flashlight kholo",
-                "flashlight chalu",
-                "flashlight start",
-
-                "torch on",
-                "torch chalao",
-                "torch jalao",
-                "torch kholo",
-                "torch chalu",
-                "torch start",
-
-                "torch laga do",
-                "torch laga",
-
-                "light on",
-                "light chalao",
-                "light jalao",
-                "light kholo",
-                "light chalu",
-
-                "flash on",
-                "flash chalao"
-            )
-        )
-    }
-
-    private fun isFlashlightOffCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "flashlight off",
-                "flashlight band",
-                "flashlight bandh",
-                "flashlight band karo",
-                "flashlight bandh karo",
-
-                "torch off",
-                "torch band",
-                "torch bandh",
-                "torch band karo",
-                "torch bandh karo",
-
-                "light off",
-                "light band",
-                "light bandh",
-                "light band karo",
-                "light bandh karo",
-
-                "flash off",
-                "flash band",
-                "flash bandh"
-            )
-        )
     }
 
     private fun flashlightOn(): String {
@@ -420,13 +138,10 @@ class LocalCommandProcessor(
                 ) as android.hardware.camera2.CameraManager
 
             val cameraId =
-                cameraManager.cameraIdList
-                    .firstOrNull()
+                cameraManager.cameraIdList.firstOrNull()
 
             if (cameraId == null) {
-
                 "Sir, flashlight available nahi hai."
-
             } else {
 
                 cameraManager.setTorchMode(
@@ -437,10 +152,7 @@ class LocalCommandProcessor(
                 "Ji Sir, torch on kar di."
             }
 
-        } catch (
-            exception: Exception
-        ) {
-
+        } catch (exception: Exception) {
             "Sir, torch on nahi ho saki."
         }
     }
@@ -455,13 +167,10 @@ class LocalCommandProcessor(
                 ) as android.hardware.camera2.CameraManager
 
             val cameraId =
-                cameraManager.cameraIdList
-                    .firstOrNull()
+                cameraManager.cameraIdList.firstOrNull()
 
             if (cameraId == null) {
-
                 "Sir, flashlight available nahi hai."
-
             } else {
 
                 cameraManager.setTorchMode(
@@ -472,80 +181,14 @@ class LocalCommandProcessor(
                 "Ji Sir, torch off kar di."
             }
 
-        } catch (
-            exception: Exception
-        ) {
-
+        } catch (exception: Exception) {
             "Sir, torch off nahi ho saki."
         }
     }
 
-    // =================================================
-    // VOLUME
-    // =================================================
-
-    private fun isVolumeUpCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "volume up",
-                "volume barhao",
-                "volume barao",
-                "volume increase",
-                "volume zyada",
-                "volume tez",
-
-                "awaz barhao",
-                "awaz barao",
-                "awaz badhao",
-                "awaz tez karo",
-
-                "sound barhao",
-                "sound barao",
-                "sound badhao",
-                "sound tez karo",
-
-                "loud karo",
-                "awaz loud karo"
-            )
-        )
-    }
-
-    private fun isVolumeDownCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "volume down",
-                "volume kam",
-                "volume kam karo",
-                "volume decrease",
-                "volume ghatao",
-
-                "awaz kam",
-                "awaz kam karo",
-                "awaz ghatao",
-                "awaz dheemi karo",
-
-                "sound kam",
-                "sound kam karo",
-                "sound ghatao",
-                "sound dheemi karo",
-
-                "quiet karo",
-                "awaz quiet karo"
-            )
-        )
-    }
-
-    private fun volumeUp(): String {
+    private fun changeVolume(
+        command: CommandIntent.Volume
+    ): String {
 
         return try {
 
@@ -554,74 +197,41 @@ class LocalCommandProcessor(
                     Context.AUDIO_SERVICE
                 ) as AudioManager
 
-            audioManager.adjustVolume(
-                AudioManager.ADJUST_RAISE,
-                AudioManager.FLAG_SHOW_UI
-            )
+            val amount =
+                command.amount ?: 1
 
-            "Ji Sir, volume barha diya."
+            repeat(amount.coerceAtMost(15)) {
 
-        } catch (
-            exception: Exception
-        ) {
+                when (command.direction) {
 
-            "Sir, volume barha nahi saka."
+                    CommandIntent.Volume.Direction.UP ->
+                        audioManager.adjustVolume(
+                            AudioManager.ADJUST_RAISE,
+                            AudioManager.FLAG_SHOW_UI
+                        )
+
+                    CommandIntent.Volume.Direction.DOWN ->
+                        audioManager.adjustVolume(
+                            AudioManager.ADJUST_LOWER,
+                            AudioManager.FLAG_SHOW_UI
+                        )
+                }
+            }
+
+            if (command.amount != null) {
+                "Ji Sir, volume ${command.amount} steps adjust kar diya."
+            } else if (
+                command.direction ==
+                CommandIntent.Volume.Direction.UP
+            ) {
+                "Ji Sir, volume barha diya."
+            } else {
+                "Ji Sir, volume kam kar diya."
+            }
+
+        } catch (exception: Exception) {
+            "Sir, volume change nahi kar saka."
         }
-    }
-
-    private fun volumeDown(): String {
-
-        return try {
-
-            val audioManager =
-                context.getSystemService(
-                    Context.AUDIO_SERVICE
-                ) as AudioManager
-
-            audioManager.adjustVolume(
-                AudioManager.ADJUST_LOWER,
-                AudioManager.FLAG_SHOW_UI
-            )
-
-            "Ji Sir, volume kam kar diya."
-
-        } catch (
-            exception: Exception
-        ) {
-
-            "Sir, volume kam nahi kar saka."
-        }
-    }
-
-    // =================================================
-    // SETTINGS
-    // =================================================
-
-    private fun isOpenSettingsCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "open settings",
-                "settings kholo",
-                "settings khol",
-                "settings open",
-                "settings chalao",
-
-                "phone settings",
-                "phone ki settings",
-
-                "setting kholo",
-                "setting khol",
-                "setting open",
-
-                "settings khol do",
-                "setting khol do"
-            )
-        )
     }
 
     private fun openSettings(): String {
@@ -632,110 +242,19 @@ class LocalCommandProcessor(
                 Intent(
                     Settings.ACTION_SETTINGS
                 ).apply {
-
                     addFlags(
                         Intent.FLAG_ACTIVITY_NEW_TASK
                     )
                 }
 
-            context.startActivity(
-                intent
-            )
+            context.startActivity(intent)
 
             "Ji Sir, settings open kar raha hoon."
 
-        } catch (
-            exception: Exception
-        ) {
-
+        } catch (exception: Exception) {
             "Sir, settings open nahi ho sakin."
         }
     }
-
-    // =================================================
-    // YOUTUBE
-    // =================================================
-
-    private fun isOpenYoutubeCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "open youtube",
-                "youtube kholo",
-                "youtube khol",
-                "youtube open",
-                "youtube chalao",
-                "youtube chala",
-                "youtube start",
-                "youtube khol do",
-
-                "youtube kholo na",
-                "youtube chala do"
-            )
-        )
-    }
-
-    // =================================================
-    // WHATSAPP
-    // =================================================
-
-    private fun isOpenWhatsappCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "open whatsapp",
-                "whatsapp kholo",
-                "whatsapp khol",
-                "whatsapp open",
-                "whatsapp chalao",
-                "whatsapp chala",
-                "whatsapp start",
-                "whatsapp khol do",
-
-                "whatsapp kholo na",
-                "whatsapp chala do"
-            )
-        )
-    }
-
-    // =================================================
-    // SPOTIFY
-    // =================================================
-
-    private fun isOpenSpotifyCommand(
-        command: String
-    ): Boolean {
-
-        return containsAny(
-            command,
-            listOf(
-
-                "open spotify",
-                "spotify kholo",
-                "spotify khol",
-                "spotify open",
-                "spotify chalao",
-                "spotify chala",
-                "spotify start",
-                "spotify khol do",
-
-                "spotify kholo na",
-                "spotify chala do"
-            )
-        )
-    }
-
-    // =================================================
-    // OPEN APP
-    // =================================================
 
     private fun openApp(
         packageName: String,
@@ -756,102 +275,241 @@ class LocalCommandProcessor(
                     Intent.FLAG_ACTIVITY_NEW_TASK
                 )
 
-                context.startActivity(
-                    intent
-                )
+                context.startActivity(intent)
 
                 "Ji Sir, $appName open kar raha hoon."
 
             } else {
-
                 "$appName is phone mein installed nahi hai, Sir."
             }
 
-        } catch (
-            exception: Exception
-        ) {
-
+        } catch (exception: Exception) {
             "Sir, $appName open nahi ho saka."
         }
     }
 
-    // =================================================
-    // GREETING
-    // =================================================
+    private fun youtubeSearch(
+        query: String
+    ): String {
 
-    private fun isGreeting(
-        command: String
-    ): Boolean {
+        if (query.isBlank()) {
+            return "Sir, YouTube par kya search karna hai?"
+        }
 
-        return containsAny(
-            command,
-            listOf(
+        return try {
 
-                "hello",
-                "hi",
-                "hey",
+            val encoded =
+                URLEncoder.encode(
+                    query,
+                    "UTF-8"
+                )
 
-                "salam",
-                "salaam",
+            val uri =
+                Uri.parse(
+                    "https://www.youtube.com/results?search_query=$encoded"
+                )
 
-                "assalamualaikum",
-                "assalamu alaikum",
-                "assalam o alaikum"
-            )
-        )
+            val youtubeIntent =
+                Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+                ).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                    setPackage(
+                        "com.google.android.youtube"
+                    )
+                }
+
+            try {
+
+                context.startActivity(
+                    youtubeIntent
+                )
+
+                "Ji Sir, YouTube par $query search kar raha hoon."
+
+            } catch (youtubeException: Exception) {
+
+                val browserIntent =
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        uri
+                    ).apply {
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK
+                        )
+                    }
+
+                context.startActivity(
+                    browserIntent
+                )
+
+                "Ji Sir, browser mein YouTube par $query search kar raha hoon."
+            }
+
+        } catch (exception: Exception) {
+            "Sir, YouTube search open nahi ho saki."
+        }
     }
 
-    private fun greetingResponse(): String {
+    private fun webSearch(
+        query: String
+    ): String {
 
-        return "Ji Sir, main yahan hoon."
+        if (query.isBlank()) {
+            return "Sir, kya search karna hai?"
+        }
+
+        return try {
+
+            val encoded =
+                URLEncoder.encode(
+                    query,
+                    "UTF-8"
+                )
+
+            val uri =
+                Uri.parse(
+                    "https://www.google.com/search?q=$encoded"
+                )
+
+            val intent =
+                Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+                ).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                }
+
+            context.startActivity(intent)
+
+            "Ji Sir, Google par $query search kar raha hoon."
+
+        } catch (exception: Exception) {
+            "Sir, Google search open nahi ho saki."
+        }
     }
 
-    // =================================================
-    // HELP
-    // =================================================
+    private fun spotifySearch(
+        query: String
+    ): String {
 
-    private fun isHelpCommand(
-        command: String
-    ): Boolean {
+        if (query.isBlank()) {
+            return "Sir, Spotify par kya search karna hai?"
+        }
 
-        return containsAny(
-            command,
-            listOf(
+        return try {
 
-                "help",
-                "madad",
+            val encoded =
+                URLEncoder.encode(
+                    query,
+                    "UTF-8"
+                )
 
-                "kya kar sakte ho",
-                "tum kya kar sakte ho",
-                "aap kya kar sakte ho",
+            val uri =
+                Uri.parse(
+                    "https://open.spotify.com/search/$encoded"
+                )
 
-                "kya kya kar sakte ho",
+            val spotifyIntent =
+                Intent(
+                    Intent.ACTION_VIEW,
+                    uri
+                ).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                    setPackage(
+                        "com.spotify.music"
+                    )
+                }
 
-                "commands",
-                "command list",
+            try {
 
-                "kya commands hain",
-                "commands batao",
+                context.startActivity(
+                    spotifyIntent
+                )
 
-                "tumhare commands"
-            )
-        )
+                "Ji Sir, Spotify par $query search kar raha hoon."
+
+            } catch (spotifyException: Exception) {
+
+                val browserIntent =
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        uri
+                    ).apply {
+                        addFlags(
+                            Intent.FLAG_ACTIVITY_NEW_TASK
+                        )
+                    }
+
+                context.startActivity(
+                    browserIntent
+                )
+
+                "Ji Sir, browser mein Spotify search open kar raha hoon."
+            }
+
+        } catch (exception: Exception) {
+            "Sir, Spotify search open nahi ho saki."
+        }
+    }
+
+    private fun whatsappShare(
+        message: String
+    ): String {
+
+        if (message.isBlank()) {
+            return "Sir, WhatsApp par kya message bhejna hai?"
+        }
+
+        return try {
+
+            val intent =
+                Intent(
+                    Intent.ACTION_SEND
+                ).apply {
+
+                    type = "text/plain"
+
+                    putExtra(
+                        Intent.EXTRA_TEXT,
+                        message
+                    )
+
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                }
+
+            val chooser =
+                Intent.createChooser(
+                    intent,
+                    "Send with WhatsApp"
+                ).apply {
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK
+                    )
+                }
+
+            context.startActivity(chooser)
+
+            "Ji Sir, WhatsApp message ready kar diya."
+
+        } catch (exception: Exception) {
+            "Sir, WhatsApp message open nahi ho saka."
+        }
     }
 
     private fun helpResponse(): String {
 
-        return """
-            Sir, main battery check kar sakta hoon,
-            torch on ya off kar sakta hoon,
-            volume control kar sakta hoon,
-            settings open kar sakta hoon,
-            aur YouTube, WhatsApp aur Spotify launch kar sakta hoon.
-        """.trimIndent()
+        return "Sir, main battery check, torch control, volume control, settings open, YouTube search, Google search, Spotify search, WhatsApp message sharing, aur YouTube, WhatsApp aur Spotify launch kar sakta hoon."
     }
-
-    // =================================================
-    // UNKNOWN COMMAND
-    // =================================================
 
     private fun unknownCommand(
         originalText: String
@@ -864,23 +522,5 @@ class LocalCommandProcessor(
         ).show()
 
         return "Sir, mujhe yeh command samajh nahi aayi. Dobara try karein."
-    }
-
-    // =================================================
-    // HELPER
-    // =================================================
-
-    private fun containsAny(
-        command: String,
-        keywords: List<String>
-    ): Boolean {
-
-        return keywords.any { keyword ->
-
-            command.contains(
-                keyword,
-                ignoreCase = true
-            )
-        }
     }
 }
