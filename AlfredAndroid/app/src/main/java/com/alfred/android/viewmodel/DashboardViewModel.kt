@@ -24,6 +24,7 @@ import com.alfred.android.storage.ConnectionSettings
 import com.alfred.android.ui.dashboard.CapabilityStatus
 import com.alfred.android.ui.dashboard.DashboardUiState
 import com.alfred.android.ui.dashboard.PermissionStatus
+import com.alfred.android.ai.AiService
 import com.alfred.android.util.DeviceInfo
 import com.alfred.android.voice.LocalCommandProcessor
 import com.alfred.android.voice.VoiceAssistant
@@ -60,11 +61,15 @@ class DashboardViewModel(
 
     private val batteryReceiver =
         BatteryEventReceiver(identity.deviceId)
+    
+    private val aiService =
+        AiService()
 
     private val commandProcessor =
         LocalCommandProcessor(
             context = app,
-            agent = agent
+            agent = agent,
+            aiService = aiService
         )
 
     private var voiceAssistant: VoiceAssistant? =

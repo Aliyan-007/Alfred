@@ -9,14 +9,15 @@ import android.provider.ContactsContract
 import android.provider.Settings
 import android.widget.Toast
 import com.alfred.android.ai.AiCommand
-import com.alfred.android.ai.AiCommandParser
+import com.alfred.android.ai.AiCommandMapper
+import com.alfred.android.ai.AiService
 import com.alfred.android.agent.AlfredAgent
 import java.net.URLEncoder
 
 class LocalCommandProcessor(
     private val context: Context,
     private val agent: AlfredAgent,
-    private val aiParser: AiCommandParser? = null
+    private val aiService: AiService? = null
 ) {
 
     private val parser =
@@ -31,47 +32,80 @@ class LocalCommandProcessor(
          * AI FIRST
          * =================================================
          *
-         * If the AI parser is configured, let the AI
-         * understand the user's natural language first.
+         * Voice text
+         *      ↓
+         * AiService
+         *      ↓
+         * GPT-OSS-20B
+         *      ↓
+         * AiCommand
+         *      ↓
+         * AiCommandMapper
+         *      ↓
+         * CommandIntent
+         *      ↓
+         * Android execution
+         *
+         * If AI fails or returns UNKNOWN, we fall back
+         * to the existing local CommandParser.
          */
 
-        if (aiParser != null) {
+        if (aiService != null && spokenText.isNotBlank()) {
 
-            val aiResult =
-                aiParser.parse(
-                    spokenText
-                )
+            try {
 
-            if (
-                aiResult.success &&
-                aiResult.command != null
-            ) {
-
-                val intent =
-                    convertAiCommand(
-                        aiResult.command,
+                val aiCommand =
+                    aiService.parseCommand(
                         spokenText
                     )
 
+                val intent =
+                    AiCommandMapper.map(
+                        command = aiCommand,
+                        originalText = spokenText
+                    )
+
+                /*
+                 * Only execute the AI result when it is
+                 * something we actually understand.
+                 *
+                 * UNKNOWN goes to the existing local parser.
+                 */
+
                 if (
-                    intent != null
+                    intent !is CommandIntent.Unknown
                 ) {
 
                     return executeIntent(
                         intent
                     )
                 }
+
+            } catch (
+                exception: Exception
+            ) {
+
+                /*
+                 * AI failure must never crash Alfred.
+                 *
+                 * Fall back to the existing local parser.
+                 */
+
+                Toast.makeText(
+                    context,
+                    "AI unavailable, using local commands",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
         /*
          * =================================================
-         * FALLBACK TO OLD PARSER
+         * LOCAL FALLBACK
          * =================================================
          *
-         * If AI is unavailable or cannot understand the
-         * command, our existing rule-based parser gets
-         * another chance.
+         * Existing rule-based command system remains
+         * fully functional.
          */
 
         val intents =
@@ -103,187 +137,6 @@ class LocalCommandProcessor(
             .ifBlank {
                 "Sir, mujhe command samajh nahi aayi."
             }
-    }
-
-    // =================================================
-    // AI -> COMMAND INTENT
-    // =================================================
-
-    private fun convertAiCommand(
-        command: AiCommand,
-        originalText: String
-    ): CommandIntent? {
-
-        return when (
-            command.intent
-        ) {
-
-            AiCommand.IntentType.BATTERY ->
-                CommandIntent.Battery
-
-            AiCommand.IntentType.FLASHLIGHT -> {
-
-                val enabled =
-                    command.enabled
-                        ?: return null
-
-                CommandIntent.Flashlight(
-                    enabled
-                )
-            }
-
-            AiCommand.IntentType.VOLUME -> {
-
-                val direction =
-                    when (
-                        command.direction
-                    ) {
-
-                        AiCommand.Direction.UP ->
-                            CommandIntent.Volume.Direction.UP
-
-                        AiCommand.Direction.DOWN ->
-                            CommandIntent.Volume.Direction.DOWN
-
-                        null ->
-                            return null
-                    }
-
-                CommandIntent.Volume(
-                    direction = direction,
-                    amount =
-                        command.amount
-                            ?.coerceIn(
-                                1,
-                                15
-                            )
-                )
-            }
-
-            AiCommand.IntentType.OPEN_SETTINGS ->
-                CommandIntent.OpenSettings
-
-            AiCommand.IntentType.OPEN_APP -> {
-
-                val app =
-                    when (
-                        command.app
-                    ) {
-
-                        AiCommand.AppType.YOUTUBE ->
-                            CommandIntent.App.YOUTUBE
-
-                        AiCommand.AppType.WHATSAPP ->
-                            CommandIntent.App.WHATSAPP
-
-                        AiCommand.AppType.SPOTIFY ->
-                            CommandIntent.App.SPOTIFY
-
-                        null ->
-                            return null
-                    }
-
-                CommandIntent.OpenApp(
-                    app
-                )
-            }
-
-            AiCommand.IntentType.YOUTUBE_SEARCH -> {
-
-                val query =
-                    command.query
-                        ?.trim()
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?: return null
-
-                CommandIntent.YouTubeSearch(
-                    query
-                )
-            }
-
-            AiCommand.IntentType.WEB_SEARCH -> {
-
-                val query =
-                    command.query
-                        ?.trim()
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?: return null
-
-                CommandIntent.WebSearch(
-                    query
-                )
-            }
-
-            AiCommand.IntentType.SPOTIFY_SEARCH -> {
-
-                val query =
-                    command.query
-                        ?.trim()
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?: return null
-
-                CommandIntent.SpotifySearch(
-                    query
-                )
-            }
-
-            AiCommand.IntentType.MESSAGE -> {
-
-                val channel =
-                    when (
-                        command.channel
-                    ) {
-
-                        AiCommand.ChannelType.SMS ->
-                            CommandIntent.Message.Channel.SMS
-
-                        AiCommand.ChannelType.WHATSAPP ->
-                            CommandIntent.Message.Channel.WHATSAPP
-
-                        null ->
-                            return null
-                    }
-
-                val contactName =
-                    command.contactName
-                        ?.trim()
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?: return null
-
-                val message =
-                    command.message
-                        ?.trim()
-                        ?.takeIf {
-                            it.isNotBlank()
-                        }
-                        ?: return null
-
-                CommandIntent.Message(
-                    channel = channel,
-                    contactName = contactName,
-                    message = message
-                )
-            }
-
-            AiCommand.IntentType.GREETING ->
-                CommandIntent.Greeting
-
-            AiCommand.IntentType.HELP ->
-                CommandIntent.Help
-
-            AiCommand.IntentType.UNKNOWN ->
-                CommandIntent.Unknown(
-                    originalText
-                )
-        }
     }
 
     // =================================================
@@ -881,7 +734,7 @@ class LocalCommandProcessor(
         number: String
     ): String {
 
-        var result =
+        val result =
             number.trim()
 
         if (
