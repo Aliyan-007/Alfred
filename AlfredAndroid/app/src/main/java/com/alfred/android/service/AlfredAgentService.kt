@@ -1,5 +1,6 @@
 package com.alfred.android.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,10 +8,11 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.ServiceInfo
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.alfred.android.AlfredApplication
 import com.alfred.android.MainActivity
 import com.alfred.android.R
@@ -33,32 +35,22 @@ class AlfredAgentService : Service() {
         const val ACTION_STOP =
             "com.alfred.android.action.STOP"
 
-        const val ACTION_START_VOICE =
+        private const val ACTION_START_VOICE =
             "com.alfred.android.action.START_VOICE"
 
-        const val ACTION_STOP_VOICE =
+        private const val ACTION_STOP_VOICE =
             "com.alfred.android.action.STOP_VOICE"
-
-        const val ACTION_START =
-            "com.alfred.android.action.START"
-
-        private const val PREFS =
-            "alfred_service_prefs"
-
-        private const val PREF_VOICE_ENABLED =
-            "voice_enabled"
 
         fun start(
             context: Context
         ) {
 
-            val prefs =
-                context.getSharedPreferences(
-                    PREFS,
+            context
+                .getSharedPreferences(
+                    "alfred_service_prefs",
                     Context.MODE_PRIVATE
                 )
-
-            prefs.edit()
+                .edit()
                 .putBoolean(
                     "service_enabled",
                     true
@@ -69,107 +61,7 @@ class AlfredAgentService : Service() {
                 Intent(
                     context,
                     AlfredAgentService::class.java
-                ).apply {
-
-                    action =
-                        ACTION_START
-                }
-
-            startServiceInternal(
-                context,
-                intent
-            )
-        }
-
-        fun startVoice(
-            context: Context
-        ) {
-
-            val prefs =
-                context.getSharedPreferences(
-                    PREFS,
-                    Context.MODE_PRIVATE
                 )
-
-            prefs.edit()
-                .putBoolean(
-                    PREF_VOICE_ENABLED,
-                    true
-                )
-                .apply()
-
-            val intent =
-                Intent(
-                    context,
-                    AlfredAgentService::class.java
-                ).apply {
-
-                    action =
-                        ACTION_START_VOICE
-                }
-
-            startServiceInternal(
-                context,
-                intent
-            )
-        }
-
-        fun stopVoice(
-            context: Context
-        ) {
-
-            context
-                .getSharedPreferences(
-                    PREFS,
-                    Context.MODE_PRIVATE
-                )
-                .edit()
-                .putBoolean(
-                    PREF_VOICE_ENABLED,
-                    false
-                )
-                .apply()
-
-            val intent =
-                Intent(
-                    context,
-                    AlfredAgentService::class.java
-                ).apply {
-
-                    action =
-                        ACTION_STOP_VOICE
-                }
-
-            startServiceInternal(
-                context,
-                intent
-            )
-        }
-
-        fun stop(
-            context: Context
-        ) {
-
-            val intent =
-                Intent(
-                    context,
-                    AlfredAgentService::class.java
-                ).apply {
-
-                    action =
-                        ACTION_STOP
-                }
-
-            startServiceInternal(
-                context,
-                intent
-            )
-        }
-
-        private fun startServiceInternal(
-            context: Context,
-            intent: Intent
-        ) {
 
             if (
                 Build.VERSION.SDK_INT >=
@@ -187,6 +79,87 @@ class AlfredAgentService : Service() {
                 )
             }
         }
+
+        fun stop(
+            context: Context
+        ) {
+
+            val intent =
+                Intent(
+                    context,
+                    AlfredAgentService::class.java
+                ).apply {
+
+                    action =
+                        ACTION_STOP
+                }
+
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O
+            ) {
+
+                context.startForegroundService(
+                    intent
+                )
+
+            } else {
+
+                context.startService(
+                    intent
+                )
+            }
+        }
+
+        fun startVoice(
+            context: Context
+        ) {
+
+            val intent =
+                Intent(
+                    context,
+                    AlfredAgentService::class.java
+                ).apply {
+
+                    action =
+                        ACTION_START_VOICE
+                }
+
+            if (
+                Build.VERSION.SDK_INT >=
+                Build.VERSION_CODES.O
+            ) {
+
+                context.startForegroundService(
+                    intent
+                )
+
+            } else {
+
+                context.startService(
+                    intent
+                )
+            }
+        }
+
+        fun stopVoice(
+            context: Context
+        ) {
+
+            val intent =
+                Intent(
+                    context,
+                    AlfredAgentService::class.java
+                ).apply {
+
+                    action =
+                        ACTION_STOP_VOICE
+                }
+
+            context.startService(
+                intent
+            )
+        }
     }
 
     private val serviceScope =
@@ -197,11 +170,11 @@ class AlfredAgentService : Service() {
 
     private lateinit var agent: AlfredAgent
 
-    private lateinit var aiService: AiService
-
-    private lateinit var commandProcessor: LocalCommandProcessor
-
     private var voiceAssistant: VoiceAssistant? =
+        null
+
+    private var commandProcessor:
+        LocalCommandProcessor? =
         null
 
     private var started =
@@ -221,21 +194,17 @@ class AlfredAgentService : Service() {
         agent =
             app.container.agent
 
-        aiService =
-            AiService()
-
         commandProcessor =
             LocalCommandProcessor(
                 context = applicationContext,
                 agent = agent,
-                aiService = aiService
+                aiService = AiService()
             )
 
         ensureNotificationChannel()
 
-        createVoiceAssistant()
-
-        startForegroundCompat(
+        startForeground(
+            Constants.NOTIF_ID_CONNECTION,
             buildNotification(
                 "Starting ALFRED..."
             )
@@ -248,57 +217,39 @@ class AlfredAgentService : Service() {
         startId: Int
     ): Int {
 
-        when (
-            intent?.action
-        ) {
+        when (intent?.action) {
 
             ACTION_STOP -> {
 
-                stopAgent()
-
-                stopForeground(
-                    STOP_FOREGROUND_REMOVE
-                )
-
-                stopSelf()
+                stopEverything()
 
                 return START_NOT_STICKY
             }
 
             ACTION_START_VOICE -> {
 
-                startAgentIfNeeded()
+                startBackgroundVoice()
 
-                startVoiceAssistant()
-
-                return START_STICKY
             }
 
             ACTION_STOP_VOICE -> {
 
-                stopVoiceAssistant()
+                stopBackgroundVoice()
 
-                return START_STICKY
             }
 
             else -> {
 
-                startAgentIfNeeded()
+                if (!started) {
 
-                return START_STICKY
+                    started = true
+
+                    startAgent()
+                }
             }
         }
-    }
 
-    private fun startAgentIfNeeded() {
-
-        if (started) {
-            return
-        }
-
-        started = true
-
-        startAgent()
+        return START_STICKY
     }
 
     private fun startAgent() {
@@ -316,33 +267,31 @@ class AlfredAgentService : Service() {
                     val hubUrl =
                         settings.hubUrl
 
-                    if (
-                        hubUrl.isBlank()
-                    ) {
+                    if (hubUrl.isBlank()) {
 
                         updateNotification(
-                            if (voiceStarted) {
-                                "Voice active • Hub not configured"
-                            } else {
-                                "Hub not configured"
-                            }
+                            "Hub not configured"
                         )
 
                         return@collectLatest
                     }
 
                     updateNotification(
-                        if (voiceStarted) {
-                            "Voice active • Connecting..."
-                        } else {
-                            "Connecting to ALFRED Hub..."
-                        }
+                        "Connecting to ALFRED Hub..."
                     )
 
                     try {
 
                         agent.start(
                             hubUrl
+                        )
+
+                        updateNotification(
+                            if (voiceStarted) {
+                                "ALFRED connected • Voice active"
+                            } else {
+                                "ALFRED connected"
+                            }
                         )
 
                     } catch (
@@ -361,127 +310,110 @@ class AlfredAgentService : Service() {
             agent.connectionState
                 .collectLatest { state ->
 
-                    val prefix =
+                    val suffix =
                         if (voiceStarted) {
-                            "Voice active • "
+                            " • Voice active"
                         } else {
                             ""
                         }
 
                     updateNotification(
-                        prefix +
-                            state.displayName
+                        state.displayName +
+                            suffix
                     )
                 }
         }
     }
 
-    private fun createVoiceAssistant() {
-
-        voiceAssistant =
-            VoiceAssistant(
-
-                context =
-                    applicationContext,
-
-                onListeningChanged = { listening ->
-
-                    if (
-                        listening
-                    ) {
-
-                        updateNotification(
-                            "Listening for voice commands..."
-                        )
-
-                    } else if (
-                        voiceStarted
-                    ) {
-
-                        updateNotification(
-                            "Voice active"
-                        )
-                    }
-                },
-
-                onResult = { text ->
-
-                    handleVoiceCommand(
-                        text
-                    )
-                },
-
-                onError = { error ->
-
-                    if (
-                        voiceStarted
-                    ) {
-
-                        updateNotification(
-                            "Voice: $error"
-                        )
-                    }
-                }
-            )
-    }
-
-    private fun startVoiceAssistant() {
+    private fun startBackgroundVoice() {
 
         if (voiceStarted) {
             return
         }
 
         if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.S
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
         ) {
 
-            /*
-             * The microphone foreground-service must be
-             * promoted while Android permits microphone
-             * foreground-service use.
-             *
-             * Dashboard should call startVoice() while
-             * the Activity is visible and RECORD_AUDIO
-             * permission is already granted.
-             */
+            updateNotification(
+                "Microphone permission required"
+            )
 
-            promoteToMicrophoneForeground()
+            return
         }
 
-        voiceStarted = true
+        voiceStarted =
+            true
+
+        if (voiceAssistant == null) {
+
+            voiceAssistant =
+                VoiceAssistant(
+                    context = applicationContext,
+
+                    onListeningChanged = { listening ->
+
+                        if (listening) {
+
+                            updateNotification(
+                                "Listening for voice command..."
+                            )
+
+                        } else {
+
+                            updateNotification(
+                                if (agent.connectionState.value
+                                    .displayName.isNotBlank()
+                                ) {
+                                    agent.connectionState
+                                        .value
+                                        .displayName +
+                                        " • Voice ready"
+                                } else {
+                                    "Voice ready"
+                                }
+                            )
+                        }
+                    },
+
+                    onResult = { text ->
+
+                        handleVoiceCommand(
+                            text
+                        )
+                    },
+
+                    onError = { error ->
+
+                        updateNotification(
+                            "Voice: $error"
+                        )
+                    }
+                )
+        }
 
         updateNotification(
-            "Voice active"
+            "ALFRED • Voice starting..."
         )
 
-        voiceAssistant?.startListening(
-            continuous = true
-        )
+        voiceAssistant?.startListening()
     }
 
-    private fun stopVoiceAssistant() {
+    private fun stopBackgroundVoice() {
 
-        voiceStarted = false
+        voiceStarted =
+            false
 
         voiceAssistant?.stopListening()
 
         updateNotification(
-            "Voice stopped"
+            agent.connectionState
+                .value
+                .displayName
         )
-
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.Q
-        ) {
-
-            startForegroundCompat(
-                buildNotification(
-                    "ALFRED running"
-                ),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-            )
-        }
     }
 
     private fun handleVoiceCommand(
@@ -490,95 +422,82 @@ class AlfredAgentService : Service() {
 
         serviceScope.launch {
 
+            val processor =
+                commandProcessor
+                    ?: return@launch
+
             updateNotification(
-                "Processing: $text"
+                "Processing voice command..."
             )
 
-            val response =
-                try {
+            try {
 
-                    commandProcessor.execute(
+                val response =
+                    processor.execute(
                         spokenText = text
                     )
 
-                } catch (
-                    exception: Exception
-                ) {
+                voiceAssistant?.speak(
+                    response
+                )
 
-                    "Sir, command process nahi ho saki."
+                updateNotification(
+                    "ALFRED • Voice ready"
+                )
+
+                voiceStarted = true
+
+                /*
+                 * Start another recognition cycle.
+                 *
+                 * Android SpeechRecognizer performs
+                 * individual recognition sessions rather
+                 * than being a permanent microphone stream.
+                 */
+                launch {
+
+                    kotlinx.coroutines.delay(
+                        700
+                    )
+
+                    if (voiceStarted) {
+
+                        voiceAssistant
+                            ?.startListening()
+                    }
                 }
 
-            voiceAssistant?.speak(
-                response
-            )
+            } catch (
+                error: Exception
+            ) {
 
-            updateNotification(
-                if (voiceStarted) {
-                    "Voice active"
-                } else {
-                    "ALFRED running"
-                }
-            )
+                updateNotification(
+                    "Voice command failed"
+                )
+            }
         }
     }
 
-    private fun promoteToMicrophoneForeground() {
+    private fun stopEverything() {
 
-        if (
-            Build.VERSION.SDK_INT <
-            Build.VERSION_CODES.Q
-        ) {
-            return
-        }
+        started =
+            false
 
-        val types =
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        voiceStarted =
+            false
 
-        startForegroundCompat(
-            buildNotification(
-                "Starting microphone..."
-            ),
-            types
-        )
-    }
+        voiceAssistant?.destroy()
 
-    private fun startForegroundCompat(
-        notification: Notification,
-        foregroundServiceType: Int =
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
-    ) {
+        voiceAssistant =
+            null
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.Q
-        ) {
-
-            startForeground(
-                Constants.NOTIF_ID_CONNECTION,
-                notification,
-                foregroundServiceType
-            )
-
-        } else {
-
-            startForeground(
-                Constants.NOTIF_ID_CONNECTION,
-                notification
-            )
-        }
-    }
-
-    private fun stopAgent() {
-
-        started = false
-
-        stopVoiceAssistant()
+        commandProcessor =
+            null
 
         agent.stop()
 
         getSharedPreferences(
-            PREFS,
+            "alfred_service_prefs",
             Context.MODE_PRIVATE
         )
             .edit()
@@ -586,28 +505,26 @@ class AlfredAgentService : Service() {
                 "service_enabled",
                 false
             )
-            .putBoolean(
-                PREF_VOICE_ENABLED,
-                false
-            )
             .apply()
-    }
 
-    override fun onDestroy() {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.N
+        ) {
 
-        started = false
+            stopForeground(
+                STOP_FOREGROUND_REMOVE
+            )
 
-        voiceStarted = false
+        } else {
 
-        voiceAssistant?.destroy()
+            @Suppress("DEPRECATION")
+            stopForeground(
+                true
+            )
+        }
 
-        voiceAssistant = null
-
-        agent.stop()
-
-        serviceScope.cancel()
-
-        super.onDestroy()
+        stopSelf()
     }
 
     override fun onTaskRemoved(
@@ -615,17 +532,35 @@ class AlfredAgentService : Service() {
     ) {
 
         /*
-         * The service is START_STICKY.
-         *
-         * Do not automatically recreate microphone mode
-         * from this callback. Android controls whether a
-         * microphone foreground service may be started from
-         * the background.
+         * START_STICKY handles normal service
+         * recreation. Do not manually start another
+         * copy here because that can create duplicate
+         * service instances.
          */
 
         super.onTaskRemoved(
             rootIntent
         )
+    }
+
+    override fun onDestroy() {
+
+        started =
+            false
+
+        voiceStarted =
+            false
+
+        voiceAssistant?.destroy()
+
+        voiceAssistant =
+            null
+
+        agent.stop()
+
+        serviceScope.cancel()
+
+        super.onDestroy()
     }
 
     override fun onBind(
@@ -646,7 +581,8 @@ class AlfredAgentService : Service() {
             ).apply {
 
                 flags =
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
 
         val openPendingIntent =
@@ -712,12 +648,12 @@ class AlfredAgentService : Service() {
         text: String
     ) {
 
-        val notificationManager =
+        val manager =
             getSystemService(
                 NOTIFICATION_SERVICE
             ) as NotificationManager
 
-        notificationManager.notify(
+        manager.notify(
             Constants.NOTIF_ID_CONNECTION,
             buildNotification(
                 text
@@ -732,7 +668,7 @@ class AlfredAgentService : Service() {
             Build.VERSION_CODES.O
         ) {
 
-            val notificationManager =
+            val manager =
                 getSystemService(
                     NOTIFICATION_SERVICE
                 ) as NotificationManager
@@ -740,18 +676,17 @@ class AlfredAgentService : Service() {
             val channel =
                 NotificationChannel(
                     Constants.NOTIF_CHANNEL_CONNECTION,
-                    "ALFRED",
+                    "ALFRED Connection",
                     NotificationManager.IMPORTANCE_LOW
                 ).apply {
 
                     description =
-                        "Keeps ALFRED running in the background"
+                        "Keeps ALFRED connected and running in the background"
                 }
 
-            notificationManager
-                .createNotificationChannel(
-                    channel
-                )
+            manager.createNotificationChannel(
+                channel
+            )
         }
     }
 }

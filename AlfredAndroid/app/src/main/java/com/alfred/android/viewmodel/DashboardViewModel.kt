@@ -27,7 +27,6 @@ import com.alfred.android.ui.dashboard.PermissionStatus
 import com.alfred.android.ai.AiService
 import com.alfred.android.util.DeviceInfo
 import com.alfred.android.voice.LocalCommandProcessor
-import com.alfred.android.voice.VoiceAssistant
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -71,9 +70,6 @@ class DashboardViewModel(
             agent = agent,
             aiService = aiService
         )
-
-    private var voiceAssistant: VoiceAssistant? =
-        null
 
     private val _voiceListening =
         MutableStateFlow(false)
@@ -153,119 +149,11 @@ class DashboardViewModel(
 
     init {
 
-        createVoiceAssistant()
-
         registerBatteryReceiver()
 
         observeAgentLogs()
 
         observeConnectionEvents()
-    }
-
-    private fun createVoiceAssistant() {
-
-        voiceAssistant =
-            VoiceAssistant(
-                context = app,
-
-                onListeningChanged = { listening ->
-
-                    _voiceListening.value =
-                        listening
-
-                    _voiceStatus.value =
-                        if (listening) {
-                            "Listening..."
-                        } else {
-                            "Ready"
-                        }
-                },
-
-                onResult = { text ->
-
-                    _lastVoiceText.value =
-                        text
-
-                    _voiceStatus.value =
-                        "Processing..."
-
-                    executeVoiceCommand(
-                        text
-                    )
-                },
-
-                onError = { error ->
-
-                    _voiceListening.value =
-                        false
-
-                    _voiceStatus.value =
-                        error
-
-                    logError(
-                        "Voice: $error"
-                    )
-                }
-            )
-    }
-
-    fun toggleVoiceListening() {
-
-        if (_voiceListening.value) {
-
-            stopVoiceListening()
-
-        } else {
-
-            startVoiceListening()
-        }
-    }
-
-    fun startVoiceListening() {
-
-        _voiceStatus.value =
-            "Starting microphone..."
-
-        voiceAssistant?.startListening()
-    }
-
-    fun stopVoiceListening() {
-
-        voiceAssistant?.stopListening()
-
-        _voiceListening.value =
-            false
-
-        _voiceStatus.value =
-            "Ready"
-    }
-
-    private fun executeVoiceCommand(
-        text: String
-    ) {
-
-        viewModelScope.launch {
-
-            logInfo(
-                "Voice command: $text"
-            )
-
-            val response =
-                commandProcessor.execute(
-                    spokenText = text
-                )
-
-            _voiceStatus.value =
-                response
-
-            logInfo(
-                "Alfred: $response"
-            )
-
-            voiceAssistant?.speak(
-                response
-            )
-        }
     }
 
     private fun registerBatteryReceiver() {
@@ -277,7 +165,53 @@ class DashboardViewModel(
             )
         )
     }
+    fun startVoiceListening() {
 
+        _voiceStatus.value =
+            "Starting microphone..."
+
+        AlfredAgentService.start(
+            app
+        )
+
+        AlfredAgentService.startVoice(
+            app
+        )
+
+        _voiceListening.value =
+            true
+
+        _voiceStatus.value =
+            "Listening..."
+        }
+
+        fun stopVoiceListening() {
+
+        AlfredAgentService.stopVoice(
+            app
+        )
+
+        _voiceListening.value =
+            false
+
+        _voiceStatus.value =
+            "Ready"
+    }
+
+    fun toggleVoiceListening() {
+
+        if (
+            _voiceListening.value
+        ) {
+
+            stopVoiceListening()
+
+        } else {
+
+            startVoiceListening()
+        }
+    }
+    
     private fun observeAgentLogs() {
 
         viewModelScope.launch {
@@ -706,11 +640,6 @@ class DashboardViewModel(
     }
 
     override fun onCleared() {
-
-        voiceAssistant?.destroy()
-
-        voiceAssistant =
-            null
 
         runCatching {
 
