@@ -1,8 +1,6 @@
 package com.alfred.android.ui.dashboard
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -31,9 +29,9 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
@@ -79,164 +77,247 @@ fun DashboardScreen(
     onNavigate: (String) -> Unit,
     viewModel: DashboardViewModel = viewModel(),
 ) {
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    val state by
+        viewModel.uiState
+            .collectAsStateWithLifecycle()
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor =
+            MaterialTheme.colorScheme.background,
     ) { padding ->
 
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .verticalScroll(
+                        rememberScrollState()
+                    )
+                    .padding(
+                        horizontal = 16.dp,
+                        vertical = 20.dp
+                    ),
+
+            verticalArrangement =
+                Arrangement.spacedBy(14.dp),
         ) {
 
-            DashboardHeader(state)
+            DashboardHeader(
+                state
+            )
 
             var sectionIndex = 0
 
             Staggered(sectionIndex++) {
-                SystemStatusCard(state)
-            }
-
-            Staggered(sectionIndex++) {
-                ConnectionSection(state)
-            }
-
-            Staggered(sectionIndex++) {
-                DeviceSection(state)
-            }
-
-            Staggered(sectionIndex++) {
-                BatterySection(state)
-            }
-
-            Staggered(sectionIndex++) {
-                ServiceSection(state, viewModel)
-            }
-
-            Staggered(sectionIndex++) {
-                CapabilitiesSection(state)
-            }
-
-            Staggered(sectionIndex++) {
-                PermissionsSection(state)
-            }
-            Staggered(sectionIndex++) {
-                VoiceSection(
-                    state = state,
-                    viewModel = viewModel
+                SystemStatusCard(
+                    state
                 )
             }
+
             Staggered(sectionIndex++) {
-                ActionsSection(onNavigate, viewModel)
+                ConnectionSection(
+                    state
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                DeviceSection(
+                    state
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                BatterySection(
+                    state
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                ServiceSection(
+                    state,
+                    viewModel
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                VoiceSection(
+                    state,
+                    viewModel
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                CapabilitiesSection(
+                    state
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                PermissionsSection(
+                    state
+                )
+            }
+
+            Staggered(sectionIndex++) {
+                ActionsSection(
+                    onNavigate,
+                    viewModel
+                )
             }
 
             Staggered(sectionIndex) {
                 AlfredFooter()
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(
+                Modifier.height(12.dp)
+            )
         }
     }
 }
 
 @Composable
 private fun DashboardHeader(
-    state: DashboardUiState,
+    state: DashboardUiState
 ) {
+
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
+        modifier =
+            Modifier.fillMaxWidth(),
+
+        verticalAlignment =
+            Alignment.CenterVertically,
     ) {
 
         AlfredLogo()
 
-        Spacer(Modifier.width(14.dp))
+        Spacer(
+            Modifier.width(14.dp)
+        )
 
         Column(
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier.weight(1f),
         ) {
 
             Text(
                 text = "ALFRED",
-                style = MaterialTheme.typography.displayLarge,
-                color = MaterialTheme.colorScheme.onBackground,
-                fontWeight = FontWeight.Bold,
+                style =
+                    MaterialTheme
+                        .typography
+                        .displayLarge,
+                color =
+                    MaterialTheme
+                        .colorScheme
+                        .onBackground,
+                fontWeight =
+                    FontWeight.Bold,
             )
 
             Text(
-                text = "Android Device Agent",
-                style = MaterialTheme.typography.titleMedium,
-                color = AlfredPrimary,
+                text =
+                    "Android Device Agent",
+                style =
+                    MaterialTheme
+                        .typography
+                        .titleMedium,
+                color =
+                    AlfredPrimary,
             )
         }
 
-        ConnectionIndicator(state.connectionState)
+        ConnectionIndicator(
+            state.connectionState
+        )
     }
 }
 
 @Composable
 private fun ConnectionIndicator(
-    state: ConnectionState,
+    state: ConnectionState
 ) {
-    val color = when (state) {
-        ConnectionState.CONNECTED -> Color(0xFF4CAF50)
-        ConnectionState.CONNECTING -> AlfredPrimary
-        ConnectionState.RECONNECTING -> Color(0xFFFFA000)
-        ConnectionState.AUTHENTICATION_FAILED -> Color(0xFFF44336)
-        ConnectionState.DISCONNECTED -> AlfredOnSurfaceMuted
-    }
+
+    val color =
+        when (state) {
+
+            ConnectionState.CONNECTED ->
+                Color(0xFF4CAF50)
+
+            ConnectionState.CONNECTING ->
+                AlfredPrimary
+
+            ConnectionState.RECONNECTING ->
+                Color(0xFFFFA000)
+
+            ConnectionState.AUTHENTICATION_FAILED ->
+                Color(0xFFF44336)
+
+            ConnectionState.DISCONNECTED ->
+                AlfredOnSurfaceMuted
+        }
 
     Box(
-        modifier = Modifier
-            .size(14.dp)
-            .background(color, CircleShape),
+        modifier =
+            Modifier
+                .size(14.dp)
+                .background(
+                    color,
+                    CircleShape
+                )
     )
 }
 
 @Composable
 private fun SystemStatusCard(
-    state: DashboardUiState,
+    state: DashboardUiState
 ) {
+
     val connected =
-        state.connectionState == ConnectionState.CONNECTED
+        state.connectionState ==
+            ConnectionState.CONNECTED
 
     val running =
         state.foregroundServiceRunning
 
-    val title = when {
-        connected && running ->
-            "ALFRED ONLINE"
+    val title =
+        when {
 
-        running ->
-            "AGENT STARTING"
+            connected && running ->
+                "ALFRED ONLINE"
 
-        else ->
-            "ALFRED OFFLINE"
-    }
+            running ->
+                "AGENT STARTING"
 
-    val description = when {
-        connected && state.authenticated ->
-            "Connected and authenticated with your Alfred Hub."
+            else ->
+                "ALFRED OFFLINE"
+        }
 
-        running ->
-            "Agent service is running. Waiting for Hub connection."
+    val description =
+        when {
 
-        else ->
-            "Start the agent to connect this Android device."
-    }
+            connected &&
+                state.authenticated ->
+                "Connected and authenticated with your Alfred Hub."
+
+            running ->
+                "Agent service is running. Waiting for Hub connection."
+
+            else ->
+                "Start the agent to connect this Android device."
+        }
 
     SectionCard(
-        title = "System Status",
+        title = "System Status"
     ) {
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
+            modifier =
+                Modifier.fillMaxWidth(),
+
+            verticalAlignment =
+                Alignment.CenterVertically,
         ) {
 
             val icon =
@@ -257,74 +338,97 @@ private fun SystemStatusCard(
                 imageVector = icon,
                 contentDescription = null,
                 tint = iconColor,
-                modifier = Modifier.size(38.dp),
+                modifier =
+                    Modifier.size(38.dp),
             )
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(
+                Modifier.width(12.dp)
+            )
 
             Column(
-                modifier = Modifier.weight(1f),
+                modifier =
+                    Modifier.weight(1f)
             ) {
 
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleLarge,
+                    fontWeight =
+                        FontWeight.Bold,
                 )
 
-                Spacer(Modifier.height(3.dp))
+                Spacer(
+                    Modifier.height(3.dp)
+                )
 
                 Text(
                     text = description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = AlfredOnSurfaceMuted,
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+                    color =
+                        AlfredOnSurfaceMuted,
                 )
             }
         }
     }
 }
 
-/**
- * Fades and slides sections into the screen.
- */
 @Composable
 private fun Staggered(
     index: Int,
     content: @Composable () -> Unit,
 ) {
-    var visible by remember {
-        mutableStateOf(false)
-    }
+
+    var visible by
+        remember {
+            mutableStateOf(false)
+        }
 
     LaunchedEffect(Unit) {
-        delay(index * 55L)
+
+        delay(
+            index * 55L
+        )
+
         visible = true
     }
 
     AnimatedVisibility(
         visible = visible,
+
         enter =
             fadeIn(
-                animationSpec = tween(350),
+                animationSpec =
+                    tween(350)
             ) +
                 slideInVertically(
-                    initialOffsetY = { it / 5 },
+                    initialOffsetY = {
+                        it / 5
+                    },
+
                     animationSpec =
                         spring(
                             dampingRatio =
-                                Spring.DampingRatioMediumBouncy,
+                                Spring
+                                    .DampingRatioMediumBouncy,
+
                             stiffness =
-                                Spring.StiffnessMediumLow,
-                        ),
-                ),
+                                Spring
+                                    .StiffnessMediumLow,
+                        )
+                )
     ) {
+
         content()
     }
 }
 
-/**
- * Shared press animation for dashboard buttons.
- */
 @Composable
 private fun rememberPressScale():
     Pair<MutableInteractionSource, Float> {
@@ -335,34 +439,44 @@ private fun rememberPressScale():
         }
 
     val isPressed by
-        interactionSource.collectIsPressedAsState()
+        interactionSource
+            .collectIsPressedAsState()
 
-    val scale by animateFloatAsState(
-        targetValue =
-            if (isPressed) {
-                0.96f
-            } else {
-                1f
-            },
-        animationSpec =
-            spring(
-                dampingRatio =
-                    Spring.DampingRatioMediumBouncy,
-                stiffness =
-                    Spring.StiffnessHigh,
-            ),
-        label = "pressScale",
-    )
+    val scale by
+        animateFloatAsState(
+            targetValue =
+                if (isPressed) {
+                    0.96f
+                } else {
+                    1f
+                },
+
+            animationSpec =
+                spring(
+                    dampingRatio =
+                        Spring
+                            .DampingRatioMediumBouncy,
+
+                    stiffness =
+                        Spring.StiffnessHigh,
+                ),
+
+            label =
+                "pressScale",
+        )
 
     return interactionSource to scale
 }
 
 @Composable
 private fun ConnectionSection(
-    state: DashboardUiState,
+    state: DashboardUiState
 ) {
+
     val (label, level) =
-        when (state.connectionState) {
+        when (
+            state.connectionState
+        ) {
 
             ConnectionState.CONNECTED ->
                 "Connected" to StatusLevel.OK
@@ -381,27 +495,33 @@ private fun ConnectionSection(
         }
 
     SectionCard(
-        title = "Connection",
+        title = "Connection"
     ) {
 
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier =
+                Modifier.fillMaxWidth(),
+
             horizontalArrangement =
                 Arrangement.SpaceBetween,
+
             verticalAlignment =
                 Alignment.CenterVertically,
         ) {
 
             Text(
                 text = "Hub Status",
-                color = AlfredOnSurfaceMuted,
+                color =
+                    AlfredOnSurfaceMuted,
                 style =
-                    MaterialTheme.typography.bodyMedium,
+                    MaterialTheme
+                        .typography
+                        .bodyMedium,
             )
 
             StatusPill(
                 label,
-                level,
+                level
             )
         }
 
@@ -420,7 +540,7 @@ private fun ConnectionSection(
                 "Yes"
             } else {
                 "No"
-            },
+            }
         )
 
         InfoRow(
@@ -429,37 +549,44 @@ private fun ConnectionSection(
                 "Yes"
             } else {
                 "No"
-            },
+            }
         )
     }
 }
 
 @Composable
 private fun DeviceSection(
-    state: DashboardUiState,
+    state: DashboardUiState
 ) {
+
     SectionCard(
-        title = "Device",
+        title = "Device"
     ) {
 
         Row(
             verticalAlignment =
-                Alignment.CenterVertically,
+                Alignment.CenterVertically
         ) {
 
             Icon(
                 imageVector =
                     Icons.Filled.PhoneAndroid,
                 contentDescription = null,
-                tint = AlfredPrimary,
+                tint =
+                    AlfredPrimary,
             )
 
-            Spacer(Modifier.width(8.dp))
+            Spacer(
+                Modifier.width(8.dp)
+            )
 
             Text(
-                text = state.deviceName,
+                text =
+                    state.deviceName,
                 style =
-                    MaterialTheme.typography.titleMedium,
+                    MaterialTheme
+                        .typography
+                        .titleMedium,
                 fontWeight =
                     FontWeight.SemiBold,
                 maxLines = 1,
@@ -468,7 +595,9 @@ private fun DeviceSection(
             )
         }
 
-        Spacer(Modifier.height(4.dp))
+        Spacer(
+            Modifier.height(4.dp)
+        )
 
         InfoRow(
             "Device ID",
@@ -496,27 +625,31 @@ private fun DeviceSection(
 
 @Composable
 private fun BatterySection(
-    state: DashboardUiState,
+    state: DashboardUiState
 ) {
+
     SectionCard(
-        title = "Battery",
+        title = "Battery"
     ) {
 
         Row(
             verticalAlignment =
-                Alignment.CenterVertically,
+                Alignment.CenterVertically
         ) {
 
             Icon(
                 imageVector =
                     Icons.Filled.BatteryChargingFull,
                 contentDescription = null,
-                tint = AlfredPrimary,
+                tint =
+                    AlfredPrimary,
                 modifier =
                     Modifier.size(30.dp),
             )
 
-            Spacer(Modifier.width(10.dp))
+            Spacer(
+                Modifier.width(10.dp)
+            )
 
             Column {
 
@@ -527,8 +660,12 @@ private fun BatterySection(
                                 "$it%"
                             }
                             ?: "Unknown",
+
                     style =
-                        MaterialTheme.typography.titleLarge,
+                        MaterialTheme
+                            .typography
+                            .titleLarge,
+
                     fontWeight =
                         FontWeight.Bold,
                 )
@@ -548,8 +685,12 @@ private fun BatterySection(
                             null ->
                                 "Battery status unknown"
                         },
+
                     style =
-                        MaterialTheme.typography.bodySmall,
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+
                     color =
                         AlfredOnSurfaceMuted,
                 )
@@ -559,79 +700,13 @@ private fun BatterySection(
 }
 
 @Composable
-private fun CapabilitiesSection(
-    state: DashboardUiState,
-) {
-    SectionCard(
-        title = "Capabilities",
-    ) {
-
-        if (
-            state.capabilities.isEmpty()
-        ) {
-
-            Text(
-                "No capabilities registered.",
-                color =
-                    AlfredOnSurfaceMuted,
-            )
-
-        } else {
-
-            state.capabilities.forEach {
-                CapabilityRow(it)
-            }
-        }
-
-        Spacer(
-            Modifier.height(6.dp),
-        )
-
-        Text(
-            text =
-                "Available capabilities can receive commands from Alfred Hub.",
-            style =
-                MaterialTheme.typography.labelSmall,
-            color =
-                AlfredOnSurfaceMuted,
-        )
-    }
-}
-
-@Composable
-private fun PermissionsSection(
-    state: DashboardUiState,
-) {
-    SectionCard(
-        title = "Permissions",
-    ) {
-
-        if (
-            state.permissions.isEmpty()
-        ) {
-
-            Text(
-                "No permission information available.",
-                color =
-                    AlfredOnSurfaceMuted,
-            )
-
-        } else {
-
-            state.permissions.forEach {
-                PermissionRow(it)
-            }
-        }
-    }
-}
-
-@Composable
 private fun ServiceSection(
     state: DashboardUiState,
-    viewModel: DashboardViewModel,
+    viewModel: DashboardViewModel
 ) {
+
     SectionCard(
-        title = "Agent Service",
+        title = "Agent Service"
     ) {
 
         InfoRow(
@@ -642,14 +717,14 @@ private fun ServiceSection(
                 "Running"
             } else {
                 "Stopped"
-            },
+            }
         )
 
         state.lastCommand?.let {
 
             InfoRow(
                 "Last command",
-                it,
+                it
             )
         }
 
@@ -657,24 +732,25 @@ private fun ServiceSection(
 
             InfoRow(
                 "Last result",
-                it,
+                it
             )
         }
 
         Spacer(
-            Modifier.height(8.dp),
+            Modifier.height(8.dp)
         )
 
         Row(
             modifier =
                 Modifier.fillMaxWidth(),
+
             horizontalArrangement =
-                Arrangement.spacedBy(8.dp),
+                Arrangement.spacedBy(8.dp)
         ) {
 
             val (
                 startSource,
-                startScale,
+                startScale
             ) =
                 rememberPressScale()
 
@@ -682,39 +758,41 @@ private fun ServiceSection(
                 onClick = {
                     viewModel.startService()
                 },
+
                 enabled =
                     !state.foregroundServiceRunning,
+
                 interactionSource =
                     startSource,
+
                 colors =
                     ButtonDefaults
                         .outlinedButtonColors(
                             contentColor =
-                                AlfredPrimary,
+                                AlfredPrimary
                         ),
+
                 modifier =
                     Modifier
                         .weight(1f)
-                        .scale(startScale),
+                        .scale(startScale)
             ) {
 
                 Icon(
                     Icons.Filled.PlayArrow,
-                    contentDescription = null,
+                    contentDescription = null
                 )
 
                 Spacer(
-                    Modifier.width(4.dp),
+                    Modifier.width(4.dp)
                 )
 
-                Text(
-                    "Start",
-                )
+                Text("Start")
             }
 
             val (
                 stopSource,
-                stopScale,
+                stopScale
             ) =
                 rememberPressScale()
 
@@ -722,36 +800,38 @@ private fun ServiceSection(
                 onClick = {
                     viewModel.stopService()
                 },
+
                 enabled =
                     state.foregroundServiceRunning,
+
                 interactionSource =
                     stopSource,
+
                 colors =
                     ButtonDefaults
                         .outlinedButtonColors(
                             contentColor =
                                 MaterialTheme
                                     .colorScheme
-                                    .error,
+                                    .error
                         ),
+
                 modifier =
                     Modifier
                         .weight(1f)
-                        .scale(stopScale),
+                        .scale(stopScale)
             ) {
 
                 Icon(
                     Icons.Filled.Stop,
-                    contentDescription = null,
+                    contentDescription = null
                 )
 
                 Spacer(
-                    Modifier.width(4.dp),
+                    Modifier.width(4.dp)
                 )
 
-                Text(
-                    "Stop",
-                )
+                Text("Stop")
             }
         }
     }
@@ -760,149 +840,270 @@ private fun ServiceSection(
 @Composable
 private fun VoiceSection(
     state: DashboardUiState,
-    viewModel: DashboardViewModel,
+    viewModel: DashboardViewModel
+) {
+
+    val listening =
+        state.voiceListening
+
+    SectionCard(
+        title = "ALFRED Voice"
+    ) {
+
+        Row(
+            modifier =
+                Modifier.fillMaxWidth(),
+
+            verticalAlignment =
+                Alignment.CenterVertically
+        ) {
+
+            Icon(
+                imageVector =
+                    Icons.Filled.Mic,
+
+                contentDescription = null,
+
+                tint =
+                    if (listening) {
+                        MaterialTheme
+                            .colorScheme
+                            .error
+                    } else {
+                        AlfredPrimary
+                    },
+
+                modifier =
+                    Modifier.size(32.dp)
+            )
+
+            Spacer(
+                Modifier.width(10.dp)
+            )
+
+            Column(
+                modifier =
+                    Modifier.weight(1f)
+            ) {
+
+                Text(
+                    text =
+                        if (listening) {
+                            "Listening"
+                        } else {
+                            "Voice Ready"
+                        },
+
+                    style =
+                        MaterialTheme
+                            .typography
+                            .titleMedium,
+
+                    fontWeight =
+                        FontWeight.SemiBold
+                )
+
+                Text(
+                    text =
+                        state.voiceStatus.ifBlank {
+                            "Ready"
+                        },
+
+                    style =
+                        MaterialTheme
+                            .typography
+                            .bodySmall,
+
+                    color =
+                        AlfredOnSurfaceMuted
+                )
+            }
+        }
+
+        state.lastVoiceText
+            .takeIf {
+                it.isNotBlank()
+            }
+            ?.let { text ->
+
+                Spacer(
+                    Modifier.height(10.dp)
+                )
+
+                InfoRow(
+                    "Last voice command",
+                    text
+                )
+            }
+
+        Spacer(
+            Modifier.height(10.dp)
+        )
+
+        val (
+            source,
+            scale
+        ) =
+            rememberPressScale()
+
+        OutlinedButton(
+            onClick = {
+
+                viewModel
+                    .toggleVoiceListening()
+
+            },
+
+            enabled =
+                state.foregroundServiceRunning,
+
+            interactionSource =
+                source,
+
+            colors =
+                ButtonDefaults
+                    .outlinedButtonColors(
+                        contentColor =
+                            if (listening) {
+                                MaterialTheme
+                                    .colorScheme
+                                    .error
+                            } else {
+                                AlfredPrimary
+                            }
+                    ),
+
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .scale(scale)
+        ) {
+
+            Icon(
+                imageVector =
+                    if (listening) {
+                        Icons.Filled.Stop
+                    } else {
+                        Icons.Filled.Mic
+                    },
+
+                contentDescription = null
+            )
+
+            Spacer(
+                Modifier.width(6.dp)
+            )
+
+            Text(
+                if (listening) {
+                    "Stop Listening"
+                } else {
+                    "Start Listening"
+                }
+            )
+        }
+
+        if (
+            !state.foregroundServiceRunning
+        ) {
+
+            Spacer(
+                Modifier.height(6.dp)
+            )
+
+            Text(
+                text =
+                    "Start the Alfred Agent service before using voice control.",
+
+                style =
+                    MaterialTheme
+                        .typography
+                        .labelSmall,
+
+                color =
+                    AlfredOnSurfaceMuted
+            )
+        }
+    }
+}
+
+@Composable
+private fun CapabilitiesSection(
+    state: DashboardUiState
 ) {
 
     SectionCard(
-        title = "Voice Assistant",
+        title = "Capabilities"
     ) {
 
-        Column(
-            modifier =
-                Modifier.fillMaxWidth(),
-            horizontalAlignment =
-                Alignment.CenterHorizontally,
+        if (
+            state.capabilities.isEmpty()
         ) {
 
             Text(
-                text =
-                    state.voiceStatus,
-                style =
-                    MaterialTheme.typography.titleMedium,
-                fontWeight =
-                    FontWeight.SemiBold,
+                "No capabilities registered.",
+                color =
+                    AlfredOnSurfaceMuted
             )
 
-            Spacer(
-                Modifier.height(8.dp),
-            )
+        } else {
 
-            if (
-                state.lastVoiceText.isNotBlank()
-            ) {
+            state.capabilities.forEach {
+                capability ->
 
-                Text(
-                    text =
-                        "\"${state.lastVoiceText}\"",
-                    style =
-                        MaterialTheme.typography.bodyMedium,
-                    color =
-                        AlfredOnSurfaceMuted,
-                )
-
-                Spacer(
-                    Modifier.height(12.dp),
+                CapabilityRow(
+                    capability
                 )
             }
+        }
 
-            val (
-                source,
-                scale,
-            ) =
-                rememberPressScale()
+        Spacer(
+            Modifier.height(6.dp)
+        )
 
-            OutlinedButton(
-                onClick = {
+        Text(
+            text =
+                "Available capabilities can receive commands from Alfred Hub.",
 
-                    viewModel.toggleVoiceListening()
-                },
+            style =
+                MaterialTheme
+                    .typography
+                    .labelSmall,
 
-                interactionSource =
-                    source,
+            color =
+                AlfredOnSurfaceMuted
+        )
+    }
+}
 
-                colors =
-                    ButtonDefaults
-                        .outlinedButtonColors(
-                            contentColor =
-                                if (
-                                    state.voiceListening
-                                ) {
-                                    MaterialTheme
-                                        .colorScheme
-                                        .error
-                                } else {
-                                    AlfredPrimary
-                                }
-                        ),
+@Composable
+private fun PermissionsSection(
+    state: DashboardUiState
+) {
 
-                modifier =
-                    Modifier
-                        .size(
-                            width = 180.dp,
-                            height = 56.dp
-                        )
-                        .scale(scale),
-            ) {
+    SectionCard(
+        title = "Permissions"
+    ) {
 
-                Icon(
-                    imageVector =
-                        if (
-                            state.voiceListening
-                        ) {
-                            Icons.Filled.MicOff
-                        } else {
-                            Icons.Filled.Mic
-                        },
-
-                    contentDescription =
-                        if (
-                            state.voiceListening
-                        ) {
-                            "Stop listening"
-                        } else {
-                            "Start listening"
-                        },
-
-                    modifier =
-                        Modifier.size(26.dp),
-                )
-
-                Spacer(
-                    Modifier.width(8.dp),
-                )
-
-                Text(
-                    text =
-                        if (
-                            state.voiceListening
-                        ) {
-                            "Stop"
-                        } else {
-                            "Speak"
-                        }
-                )
-            }
-
-            Spacer(
-                Modifier.height(8.dp),
-            )
+        if (
+            state.permissions.isEmpty()
+        ) {
 
             Text(
-                text =
-                    if (
-                        state.voiceListening
-                    ) {
-                        "Alfred is listening..."
-                    } else {
-                        "Tap Speak to give Alfred a command"
-                    },
-
-                style =
-                    MaterialTheme.typography.bodySmall,
-
+                "No permission information available.",
                 color =
-                    AlfredOnSurfaceMuted,
+                    AlfredOnSurfaceMuted
             )
+
+        } else {
+
+            state.permissions.forEach {
+                permission ->
+
+                PermissionRow(
+                    permission
+                )
+            }
         }
     }
 }
@@ -910,22 +1111,24 @@ private fun VoiceSection(
 @Composable
 private fun ActionsSection(
     onNavigate: (String) -> Unit,
-    viewModel: DashboardViewModel,
+    viewModel: DashboardViewModel
 ) {
+
     SectionCard(
-        title = "Quick Actions",
+        title = "Quick Actions"
     ) {
 
         Column(
             verticalArrangement =
-                Arrangement.spacedBy(8.dp),
+                Arrangement.spacedBy(8.dp)
         ) {
 
             Row(
                 modifier =
                     Modifier.fillMaxWidth(),
+
                 horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
+                    Arrangement.spacedBy(8.dp)
             ) {
 
                 ActButton(
@@ -933,9 +1136,12 @@ private fun ActionsSection(
                     icon =
                         Icons.Filled.Link,
                     modifier =
-                        Modifier.weight(1f),
+                        Modifier.weight(1f)
                 ) {
-                    onNavigate("pairing")
+
+                    onNavigate(
+                        "pairing"
+                    )
                 }
 
                 ActButton(
@@ -943,17 +1149,20 @@ private fun ActionsSection(
                     icon =
                         Icons.Filled.Sync,
                     modifier =
-                        Modifier.weight(1f),
+                        Modifier.weight(1f)
                 ) {
-                    viewModel.testConnection()
+
+                    viewModel
+                        .testConnection()
                 }
             }
 
             Row(
                 modifier =
                     Modifier.fillMaxWidth(),
+
                 horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
+                    Arrangement.spacedBy(8.dp)
             ) {
 
                 ActButton(
@@ -961,9 +1170,12 @@ private fun ActionsSection(
                     icon =
                         Icons.Filled.Lock,
                     modifier =
-                        Modifier.weight(1f),
+                        Modifier.weight(1f)
                 ) {
-                    onNavigate("permissions")
+
+                    onNavigate(
+                        "permissions"
+                    )
                 }
 
                 ActButton(
@@ -971,17 +1183,21 @@ private fun ActionsSection(
                     icon =
                         Icons.Filled.Settings,
                     modifier =
-                        Modifier.weight(1f),
+                        Modifier.weight(1f)
                 ) {
-                    onNavigate("settings")
+
+                    onNavigate(
+                        "settings"
+                    )
                 }
             }
 
             Row(
                 modifier =
                     Modifier.fillMaxWidth(),
+
                 horizontalArrangement =
-                    Arrangement.spacedBy(8.dp),
+                    Arrangement.spacedBy(8.dp)
             ) {
 
                 ActButton(
@@ -989,15 +1205,17 @@ private fun ActionsSection(
                     icon =
                         Icons.Filled.Description,
                     modifier =
-                        Modifier.weight(1f),
+                        Modifier.weight(1f)
                 ) {
-                    onNavigate("logs")
+
+                    onNavigate(
+                        "logs"
+                    )
                 }
             }
         }
     }
 }
-
 
 @Composable
 private fun ActButton(
@@ -1009,37 +1227,44 @@ private fun ActButton(
 
     val (
         source,
-        scale,
+        scale
     ) =
         rememberPressScale()
 
     OutlinedButton(
         onClick = onClick,
+
         modifier =
-            modifier.scale(scale),
+            modifier.scale(
+                scale
+            ),
+
         interactionSource =
             source,
+
         colors =
             ButtonDefaults
                 .outlinedButtonColors(
                     contentColor =
-                        AlfredPrimary,
-                ),
+                        AlfredPrimary
+                )
     ) {
 
         Icon(
             imageVector = icon,
-            contentDescription = null,
+            contentDescription = null
         )
 
         Spacer(
-            Modifier.width(6.dp),
+            Modifier.width(6.dp)
         )
 
         Text(
             text = text,
             style =
-                MaterialTheme.typography.labelLarge,
+                MaterialTheme
+                    .typography
+                    .labelLarge
         )
     }
 }
@@ -1052,35 +1277,42 @@ private fun AlfredFooter() {
         HorizontalDivider()
 
         Spacer(
-            Modifier.height(12.dp),
+            Modifier.height(12.dp)
         )
 
         Row(
             verticalAlignment =
-                Alignment.CenterVertically,
+                Alignment.CenterVertically
         ) {
 
             Icon(
                 imageVector =
                     Icons.Filled.Build,
+
                 contentDescription = null,
+
                 tint =
                     AlfredOnSurfaceMuted,
+
                 modifier =
-                    Modifier.size(18.dp),
+                    Modifier.size(18.dp)
             )
 
             Spacer(
-                Modifier.width(8.dp),
+                Modifier.width(8.dp)
             )
 
             Text(
                 text =
                     "ALFRED • Android Device Agent",
+
                 style =
-                    MaterialTheme.typography.labelSmall,
+                    MaterialTheme
+                        .typography
+                        .labelSmall,
+
                 color =
-                    AlfredOnSurfaceMuted,
+                    AlfredOnSurfaceMuted
             )
         }
     }

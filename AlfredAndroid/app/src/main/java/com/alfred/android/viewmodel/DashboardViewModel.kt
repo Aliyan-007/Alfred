@@ -24,9 +24,7 @@ import com.alfred.android.storage.ConnectionSettings
 import com.alfred.android.ui.dashboard.CapabilityStatus
 import com.alfred.android.ui.dashboard.DashboardUiState
 import com.alfred.android.ui.dashboard.PermissionStatus
-import com.alfred.android.ai.AiService
 import com.alfred.android.util.DeviceInfo
-import com.alfred.android.voice.LocalCommandProcessor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -59,31 +57,17 @@ class DashboardViewModel(
         )
 
     private val batteryReceiver =
-        BatteryEventReceiver(identity.deviceId)
-    
-    private val aiService =
-        AiService()
-
-    private val commandProcessor =
-        LocalCommandProcessor(
-            context = app,
-            agent = agent,
-            aiService = aiService
+        BatteryEventReceiver(
+            identity.deviceId
         )
 
-    private val _voiceListening =
-        MutableStateFlow(false)
-
-    private val _lastVoiceText =
-        MutableStateFlow("")
-
-    private val _voiceStatus =
-        MutableStateFlow("Ready")
-
     private val _logs =
-        MutableStateFlow<List<LogEntry>>(emptyList())
+        MutableStateFlow<List<LogEntry>>(
+            emptyList()
+        )
 
-    val logs: StateFlow<List<LogEntry>> =
+    val logs:
+        StateFlow<List<LogEntry>> =
         _logs.asStateFlow()
 
     private val _serviceRunning =
@@ -94,7 +78,8 @@ class DashboardViewModel(
             )
         )
 
-    val uiState: StateFlow<DashboardUiState> =
+    val uiState:
+        StateFlow<DashboardUiState> =
         combine(
             agent.connectionState,
             agent.authenticated,
@@ -103,12 +88,13 @@ class DashboardViewModel(
             agent.lastResult,
             _serviceRunning,
             settingsRepository.settings,
-            _voiceListening,
-            _lastVoiceText,
-            _voiceStatus
+            AlfredAgentService.voiceListening,
+            AlfredAgentService.lastVoiceText,
+            AlfredAgentService.voiceStatus
         ) { values ->
 
             @Suppress("UNCHECKED_CAST")
+
             buildState(
                 connectionState =
                     values[0] as ConnectionState,
@@ -143,8 +129,12 @@ class DashboardViewModel(
 
         }.stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = DashboardUiState()
+            started =
+                SharingStarted.WhileSubscribed(
+                    5_000
+                ),
+            initialValue =
+                DashboardUiState()
         )
 
     init {
@@ -154,6 +144,65 @@ class DashboardViewModel(
         observeAgentLogs()
 
         observeConnectionEvents()
+
+        observeServiceState()
+    }
+
+    private fun observeServiceState() {
+
+        viewModelScope.launch {
+
+            AlfredAgentService
+                .serviceRunning
+                .collect { running ->
+
+                    _serviceRunning.value =
+                        running
+                }
+        }
+    }
+
+    fun toggleVoiceListening() {
+
+        if (
+            AlfredAgentService
+                .voiceListening
+                .value
+        ) {
+
+            stopVoiceListening()
+
+        } else {
+
+            startVoiceListening()
+        }
+    }
+
+    fun startVoiceListening() {
+
+        if (
+            !_serviceRunning.value
+        ) {
+
+            logError(
+                "Start the Alfred Agent service before using voice control."
+            )
+
+            return
+        }
+
+        AlfredAgentService
+            .startVoice(
+                app
+            )
+    }
+
+    fun stopVoiceListening() {
+
+        AlfredAgentService
+            .stopVoice(
+                app
+            )
     }
 
     private fun registerBatteryReceiver() {
@@ -165,53 +214,7 @@ class DashboardViewModel(
             )
         )
     }
-    fun startVoiceListening() {
 
-        _voiceStatus.value =
-            "Starting microphone..."
-
-        AlfredAgentService.start(
-            app
-        )
-
-        AlfredAgentService.startVoice(
-            app
-        )
-
-        _voiceListening.value =
-            true
-
-        _voiceStatus.value =
-            "Listening..."
-        }
-
-        fun stopVoiceListening() {
-
-        AlfredAgentService.stopVoice(
-            app
-        )
-
-        _voiceListening.value =
-            false
-
-        _voiceStatus.value =
-            "Ready"
-    }
-
-    fun toggleVoiceListening() {
-
-        if (
-            _voiceListening.value
-        ) {
-
-            stopVoiceListening()
-
-        } else {
-
-            startVoiceListening()
-        }
-    }
-    
     private fun observeAgentLogs() {
 
         viewModelScope.launch {
@@ -232,29 +235,30 @@ class DashboardViewModel(
 
         viewModelScope.launch {
 
-            agent.connectionState.collect { state ->
+            agent.connectionState
+                .collect { state ->
 
-                when (state) {
+                    when (state) {
 
-                    ConnectionState.CONNECTED -> {
+                        ConnectionState.CONNECTED -> {
 
-                        DeviceEvents.emit(
-                            EventNames.DEVICE_CONNECTED,
-                            identity.deviceId
-                        )
+                            DeviceEvents.emit(
+                                EventNames.DEVICE_CONNECTED,
+                                identity.deviceId
+                            )
+                        }
+
+                        ConnectionState.DISCONNECTED -> {
+
+                            DeviceEvents.emit(
+                                EventNames.DEVICE_DISCONNECTED,
+                                identity.deviceId
+                            )
+                        }
+
+                        else -> Unit
                     }
-
-                    ConnectionState.DISCONNECTED -> {
-
-                        DeviceEvents.emit(
-                            EventNames.DEVICE_DISCONNECTED,
-                            identity.deviceId
-                        )
-                    }
-
-                    else -> Unit
                 }
-            }
         }
     }
 
@@ -297,7 +301,8 @@ class DashboardViewModel(
                 }
 
         val permissions =
-            AlfredPermissions.ALL.map { permission ->
+            AlfredPermissions.ALL.map {
+                permission ->
 
                 PermissionStatus(
                     name =
@@ -309,42 +314,47 @@ class DashboardViewModel(
                         )
                 )
 
-            } + listOf(
+            } +
+                listOf(
 
-                PermissionStatus(
-                    name =
-                        "Notification access",
+                    PermissionStatus(
+                        name =
+                            "Notification access",
 
-                    granted =
-                        NotificationState.listenerConnected,
+                        granted =
+                            NotificationState
+                                .listenerConnected,
 
-                    note =
-                        if (
-                            !NotificationState.listenerConnected
-                        ) {
-                            "Disabled"
-                        } else {
-                            null
-                        }
-                ),
+                        note =
+                            if (
+                                !NotificationState
+                                    .listenerConnected
+                            ) {
+                                "Disabled"
+                            } else {
+                                null
+                            }
+                    ),
 
-                PermissionStatus(
-                    name =
-                        "Accessibility",
+                    PermissionStatus(
+                        name =
+                            "Accessibility",
 
-                    granted =
-                        AccessibilityState.connected,
+                        granted =
+                            AccessibilityState
+                                .connected,
 
-                    note =
-                        if (
-                            !AccessibilityState.connected
-                        ) {
-                            "Disabled"
-                        } else {
-                            null
-                        }
+                        note =
+                            if (
+                                !AccessibilityState
+                                    .connected
+                            ) {
+                                "Disabled"
+                            } else {
+                                null
+                            }
+                    )
                 )
-            )
 
         val battery =
             readBattery(
@@ -370,7 +380,8 @@ class DashboardViewModel(
 
             deviceName =
                 settings.deviceName.ifBlank {
-                    DeviceInfo.defaultDisplayName()
+                    DeviceInfo
+                        .defaultDisplayName()
                 },
 
             manufacturer =
@@ -481,7 +492,9 @@ class DashboardViewModel(
         val hubUrl =
             uiState.value.hubUrl
 
-        if (hubUrl.isBlank()) {
+        if (
+            hubUrl.isBlank()
+        ) {
 
             logError(
                 "Hub URL not configured"
@@ -501,7 +514,9 @@ class DashboardViewModel(
         code: String
     ) {
 
-        if (code.isBlank()) {
+        if (
+            code.isBlank()
+        ) {
 
             logError(
                 "Pairing code is empty"
@@ -572,16 +587,17 @@ class DashboardViewModel(
         _logs.update { currentLogs ->
 
             (
-                currentLogs + LogEntry(
-                    ts =
-                        System.currentTimeMillis(),
+                currentLogs +
+                    LogEntry(
+                        ts =
+                            System.currentTimeMillis(),
 
-                    level =
-                        level,
+                        level =
+                            level,
 
-                    message =
-                        message
-                )
+                        message =
+                            message
+                    )
             ).takeLast(200)
         }
     }
@@ -632,9 +648,11 @@ class DashboardViewModel(
 
         val charging =
             status ==
-                BatteryManager.BATTERY_STATUS_CHARGING ||
+                BatteryManager
+                    .BATTERY_STATUS_CHARGING ||
             status ==
-                BatteryManager.BATTERY_STATUS_FULL
+                BatteryManager
+                    .BATTERY_STATUS_FULL
 
         return percentage to charging
     }
@@ -644,7 +662,7 @@ class DashboardViewModel(
         runCatching {
 
             app.unregisterReceiver(
-                batteryReceiver as BroadcastReceiver
+                batteryReceiver
             )
         }
 
