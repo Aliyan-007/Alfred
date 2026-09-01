@@ -27,30 +27,52 @@ class VoiceAssistant(
 
     private var isListening = false
 
+    private var continuousMode = false
+
+    private var destroyed = false
+
     init {
 
-        textToSpeech = TextToSpeech(
-            context.applicationContext,
-            this
-        )
+        textToSpeech =
+            TextToSpeech(
+                context.applicationContext,
+                this
+            )
     }
 
-    override fun onInit(status: Int) {
+    override fun onInit(
+        status: Int
+    ) {
 
-        if (status == TextToSpeech.SUCCESS) {
+        if (
+            status == TextToSpeech.SUCCESS
+        ) {
 
             ttsReady = true
 
             textToSpeech?.language =
                 Locale.US
 
-            textToSpeech?.setSpeechRate(1.0f)
+            textToSpeech?.setSpeechRate(
+                1.0f
+            )
 
-            textToSpeech?.setPitch(1.0f)
+            textToSpeech?.setPitch(
+                1.0f
+            )
         }
     }
 
-    fun startListening() {
+    fun startListening(
+        continuous: Boolean = false
+    ) {
+
+        continuousMode =
+            continuous
+
+        if (destroyed) {
+            return
+        }
 
         if (
             ContextCompat.checkSelfPermission(
@@ -79,7 +101,16 @@ class VoiceAssistant(
             return
         }
 
-        stopListening()
+        startRecognition()
+    }
+
+    private fun startRecognition() {
+
+        if (destroyed) {
+            return
+        }
+
+        stopRecognizerOnly()
 
         speechRecognizer =
             SpeechRecognizer.createSpeechRecognizer(
@@ -95,7 +126,9 @@ class VoiceAssistant(
 
                     isListening = true
 
-                    onListeningChanged(true)
+                    onListeningChanged(
+                        true
+                    )
                 }
 
                 override fun onBeginningOfSpeech() {
@@ -112,6 +145,12 @@ class VoiceAssistant(
                 }
 
                 override fun onEndOfSpeech() {
+
+                    isListening = false
+
+                    onListeningChanged(
+                        false
+                    )
                 }
 
                 override fun onError(
@@ -120,12 +159,32 @@ class VoiceAssistant(
 
                     isListening = false
 
-                    onListeningChanged(false)
+                    onListeningChanged(
+                        false
+                    )
 
                     val message =
-                        recognitionErrorMessage(error)
+                        recognitionErrorMessage(
+                            error
+                        )
 
-                    onError(message)
+                    if (
+                        continuousMode &&
+                        !destroyed &&
+                        error != SpeechRecognizer.ERROR_CLIENT
+                    ) {
+
+                        onError(
+                            message
+                        )
+
+                        restartRecognition()
+                    } else {
+
+                        onError(
+                            message
+                        )
+                    }
                 }
 
                 override fun onResults(
@@ -134,7 +193,9 @@ class VoiceAssistant(
 
                     isListening = false
 
-                    onListeningChanged(false)
+                    onListeningChanged(
+                        false
+                    )
 
                     val matches =
                         results?.getStringArrayList(
@@ -146,16 +207,38 @@ class VoiceAssistant(
                             ?.firstOrNull()
                             ?.trim()
 
-                    if (text.isNullOrBlank()) {
+                    if (
+                        text.isNullOrBlank()
+                    ) {
 
-                        onError(
-                            "I did not hear anything"
-                        )
+                        if (
+                            continuousMode &&
+                            !destroyed
+                        ) {
+
+                            restartRecognition()
+
+                        } else {
+
+                            onError(
+                                "I did not hear anything"
+                            )
+                        }
 
                         return
                     }
 
-                    onResult(text)
+                    onResult(
+                        text
+                    )
+
+                    if (
+                        continuousMode &&
+                        !destroyed
+                    ) {
+
+                        restartRecognition()
+                    }
                 }
 
                 override fun onPartialResults(
@@ -207,20 +290,94 @@ class VoiceAssistant(
         )
     }
 
+    private fun restartRecognition() {
+
+        if (
+            destroyed ||
+            !continuousMode
+        ) {
+            return
+        }
+
+        Thread {
+            try {
+
+                Thread.sleep(
+                    500
+                )
+
+            } catch (
+                ignored: InterruptedException
+            ) {
+            }
+
+            if (
+                !destroyed &&
+                continuousMode
+            ) {
+
+                android.os.Handler(
+                    android.os.Looper.getMainLooper()
+                ).post {
+
+                    if (
+                        !destroyed &&
+                        continuousMode
+                    ) {
+
+                        startRecognition()
+                    }
+                }
+            }
+
+        }.start()
+    }
+
     fun stopListening() {
 
-        if (isListening) {
+        continuousMode =
+            false
 
-            speechRecognizer?.stopListening()
-        }
+        stopRecognizerOnly()
 
         isListening = false
 
-        onListeningChanged(false)
+        onListeningChanged(
+            false
+        )
+    }
 
-        speechRecognizer?.destroy()
+    private fun stopRecognizerOnly() {
 
-        speechRecognizer = null
+        try {
+
+            speechRecognizer?.stopListening()
+
+        } catch (
+            ignored: Exception
+        ) {
+        }
+
+        try {
+
+            speechRecognizer?.cancel()
+
+        } catch (
+            ignored: Exception
+        ) {
+        }
+
+        try {
+
+            speechRecognizer?.destroy()
+
+        } catch (
+            ignored: Exception
+        ) {
+        }
+
+        speechRecognizer =
+            null
     }
 
     fun speak(
@@ -229,13 +386,25 @@ class VoiceAssistant(
 
         if (
             !ttsReady ||
-            text.isBlank()
+            text.isBlank() ||
+            destroyed
+        ) {
+            return
+        }
+
+        val cleanText =
+            cleanForSpeech(
+                text
+            )
+
+        if (
+            cleanText.isBlank()
         ) {
             return
         }
 
         textToSpeech?.speak(
-            cleanForSpeech(text),
+            cleanText,
             TextToSpeech.QUEUE_FLUSH,
             null,
             "alfred_voice"
@@ -298,7 +467,11 @@ class VoiceAssistant(
 
     fun destroy() {
 
-        stopListening()
+        destroyed = true
+
+        continuousMode = false
+
+        stopRecognizerOnly()
 
         textToSpeech?.stop()
 
@@ -307,5 +480,7 @@ class VoiceAssistant(
         textToSpeech = null
 
         ttsReady = false
+
+        isListening = false
     }
 }

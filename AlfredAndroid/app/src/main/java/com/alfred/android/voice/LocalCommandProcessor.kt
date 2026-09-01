@@ -8,7 +8,6 @@ import android.os.BatteryManager
 import android.provider.ContactsContract
 import android.provider.Settings
 import android.widget.Toast
-import com.alfred.android.ai.AiCommand
 import com.alfred.android.ai.AiCommandMapper
 import com.alfred.android.ai.AiService
 import com.alfred.android.agent.AlfredAgent
@@ -27,30 +26,11 @@ class LocalCommandProcessor(
         spokenText: String
     ): String {
 
-        /*
-         * =================================================
-         * AI FIRST
-         * =================================================
-         *
-         * Voice text
-         *      ↓
-         * AiService
-         *      ↓
-         * GPT-OSS-20B
-         *      ↓
-         * AiCommand
-         *      ↓
-         * AiCommandMapper
-         *      ↓
-         * CommandIntent
-         *      ↓
-         * Android execution
-         *
-         * If AI fails or returns UNKNOWN, we fall back
-         * to the existing local CommandParser.
-         */
+        // =================================================
+        // AI FIRST
+        // =================================================
 
-        if (aiService != null && spokenText.isNotBlank()) {
+        if (aiService != null) {
 
             try {
 
@@ -61,16 +41,9 @@ class LocalCommandProcessor(
 
                 val intent =
                     AiCommandMapper.map(
-                        command = aiCommand,
-                        originalText = spokenText
+                        aiCommand,
+                        spokenText
                     )
-
-                /*
-                 * Only execute the AI result when it is
-                 * something we actually understand.
-                 *
-                 * UNKNOWN goes to the existing local parser.
-                 */
 
                 if (
                     intent !is CommandIntent.Unknown
@@ -85,12 +58,6 @@ class LocalCommandProcessor(
                 exception: Exception
             ) {
 
-                /*
-                 * AI failure must never crash Alfred.
-                 *
-                 * Fall back to the existing local parser.
-                 */
-
                 Toast.makeText(
                     context,
                     "AI unavailable, using local commands",
@@ -99,14 +66,9 @@ class LocalCommandProcessor(
             }
         }
 
-        /*
-         * =================================================
-         * LOCAL FALLBACK
-         * =================================================
-         *
-         * Existing rule-based command system remains
-         * fully functional.
-         */
+        // =================================================
+        // LOCAL FALLBACK
+        // =================================================
 
         val intents =
             parser.parse(
@@ -484,7 +446,10 @@ class LocalCommandProcessor(
                 context.contentResolver
 
             val uri =
-                ContactsContract.CommonDataKinds.Phone.CONTENT_URI
+                ContactsContract
+                    .CommonDataKinds
+                    .Phone
+                    .CONTENT_URI
 
             val projection =
                 arrayOf(
@@ -514,7 +479,10 @@ class LocalCommandProcessor(
 
                     val numberIndex =
                         cursor.getColumnIndex(
-                            ContactsContract.CommonDataKinds.Phone.NUMBER
+                            ContactsContract
+                                .CommonDataKinds
+                                .Phone
+                                .NUMBER
                         )
 
                     if (
@@ -644,11 +612,10 @@ class LocalCommandProcessor(
         return try {
 
             val cleanNumber =
-                number
-                    .replace(
-                        Regex("[^0-9+]"),
-                        ""
-                    )
+                number.replace(
+                    Regex("[^0-9+]"),
+                    ""
+                )
 
             val internationalNumber =
                 normalizePhoneNumber(
@@ -727,7 +694,7 @@ class LocalCommandProcessor(
     }
 
     // =================================================
-    // PAKISTAN PHONE NUMBER NORMALIZATION
+    // PHONE NORMALIZATION
     // =================================================
 
     private fun normalizePhoneNumber(
