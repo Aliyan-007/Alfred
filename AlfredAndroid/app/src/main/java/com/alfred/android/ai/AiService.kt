@@ -4,6 +4,7 @@ import com.alfred.android.BuildConfig
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -12,24 +13,39 @@ import java.util.concurrent.TimeUnit
 
 class AiService {
 
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private val client =
+        OkHttpClient.Builder()
+            .connectTimeout(
+                30,
+                TimeUnit.SECONDS
+            )
+            .readTimeout(
+                60,
+                TimeUnit.SECONDS
+            )
+            .writeTimeout(
+                30,
+                TimeUnit.SECONDS
+            )
+            .build()
 
-    private val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            coerceInputValues = true
+        }
 
-    suspend fun parseCommand(text: String): AiCommand {
+    suspend fun parseCommand(
+        text: String
+    ): AiCommand {
 
         if (text.isBlank()) {
             return unknownCommand()
         }
 
-        val apiKey = BuildConfig.GROQ_API_KEY
+        val apiKey =
+            BuildConfig.GROQ_API_KEY
 
         if (apiKey.isBlank()) {
             throw IllegalStateException(
@@ -37,13 +53,16 @@ class AiService {
             )
         }
 
-        val requestJson = """
+        val requestJson =
+            """
             {
               "model": "openai/gpt-oss-20b",
               "messages": [
                 {
                   "role": "system",
-                  "content": ${quote(AiPrompt.SYSTEM_PROMPT)}
+                  "content": ${quote(
+                      AiPrompt.SYSTEM_PROMPT
+                  )}
                 },
                 {
                   "role": "user",
@@ -51,61 +70,82 @@ class AiService {
                 }
               ],
               "temperature": 0,
-              "max_tokens": 300
+              "max_completion_tokens": 300,
+              "reasoning_effort": "low",
+              "reasoning_format": "hidden",
+              "response_format": {
+                "type": "json_object"
+              }
             }
-        """.trimIndent()
+            """.trimIndent()
 
-        val body = requestJson
-            .toRequestBody(
+        val body =
+            requestJson.toRequestBody(
                 "application/json".toMediaType()
             )
 
-        val request = Request.Builder()
-            .url("https://api.groq.com/openai/v1/chat/completions")
-            .addHeader(
-                "Authorization",
-                "Bearer $apiKey"
-            )
-            .addHeader(
-                "Content-Type",
-                "application/json"
-            )
-            .post(body)
-            .build()
+        val request =
+            Request.Builder()
+                .url(
+                    "https://api.groq.com/openai/v1/chat/completions"
+                )
+                .addHeader(
+                    "Authorization",
+                    "Bearer $apiKey"
+                )
+                .addHeader(
+                    "Content-Type",
+                    "application/json"
+                )
+                .post(body)
+                .build()
 
-        client.newCall(request).execute().use { response ->
+        client
+            .newCall(request)
+            .execute()
+            .use { response ->
 
-            val responseBody = response.body?.string().orEmpty()
+                val responseBody =
+                    response.body
+                        ?.string()
+                        .orEmpty()
 
-            if (!response.isSuccessful) {
-                throw IllegalStateException(
-                    "Groq request failed: " +
-                        "${response.code} $responseBody"
+                if (!response.isSuccessful) {
+                    throw IllegalStateException(
+                        "Groq request failed: " +
+                            "${response.code} $responseBody"
+                    )
+                }
+
+                if (responseBody.isBlank()) {
+                    throw IllegalStateException(
+                        "Groq returned an empty response"
+                    )
+                }
+
+                return parseGroqResponse(
+                    responseBody
                 )
             }
-
-            if (responseBody.isBlank()) {
-                throw IllegalStateException(
-                    "Groq returned an empty response"
-                )
-            }
-
-            return parseGroqResponse(responseBody)
-        }
     }
 
     private fun parseGroqResponse(
         responseBody: String
     ): AiCommand {
 
-        val root = json.parseToJsonElement(responseBody)
-            .jsonObject
+        val root =
+            json
+                .parseToJsonElement(
+                    responseBody
+                )
+                .jsonObject
 
-        val choices = root["choices"]
-            ?.jsonArray
-            ?: throw IllegalStateException(
-                "Groq response does not contain choices"
-            )
+        val choices =
+            root["choices"]
+                ?.jsonArray
+                ?: throw IllegalStateException(
+                    "Groq response does not contain choices"
+                )
 
         if (choices.isEmpty()) {
             throw IllegalStateException(
@@ -113,72 +153,134 @@ class AiService {
             )
         }
 
-        val firstChoice = choices[0].jsonObject
+        val firstChoice =
+            choices[0].jsonObject
 
-        val message = firstChoice["message"]
-            ?.jsonObject
-            ?: throw IllegalStateException(
-                "Groq response does not contain message"
+        val message =
+            firstChoice["message"]
+                ?.jsonObject
+                ?: throw IllegalStateException(
+                    "Groq response does not contain message"
+                )
+
+        val content =
+            message["content"]
+                ?.jsonPrimitive
+                ?.content
+                ?.trim()
+                ?: throw IllegalStateException(
+                    "Groq response does not contain content"
+                )
+
+        val cleanedJson =
+            cleanJson(content)
+
+        return try {
+
+            json.decodeFromString<AiCommand>(
+                cleanedJson
             )
 
-        val content = message["content"]
-            ?.toString()
-            ?.trim('"')
-            ?.trim()
-            ?: throw IllegalStateException(
-                "Groq response does not contain content"
+        } catch (exception: Exception) {
+
+            throw IllegalStateException(
+                "Failed to decode AI command. " +
+                    "Raw content: $content",
+                exception
             )
-
-        val cleanedJson = cleanJson(content)
-
-        return json.decodeFromString<AiCommand>(
-            cleanedJson
-        )
+        }
     }
 
-    private fun cleanJson(text: String): String {
+    private fun cleanJson(
+        text: String
+    ): String {
 
-        var result = text.trim()
+        var result =
+            text.trim()
 
-        if (result.startsWith("```")) {
-            result = result
-                .removePrefix("```json")
-                .removePrefix("```JSON")
-                .removePrefix("```")
-                .trim()
-
-            if (result.endsWith("```")) {
-                result = result
-                    .removeSuffix("```")
+        if (
+            result.startsWith("```json")
+        ) {
+            result =
+                result
+                    .removePrefix("```json")
                     .trim()
-            }
+
+        } else if (
+            result.startsWith("```JSON")
+        ) {
+            result =
+                result
+                    .removePrefix("```JSON")
+                    .trim()
+
+        } else if (
+            result.startsWith("```")
+        ) {
+            result =
+                result
+                    .removePrefix("```")
+                    .trim()
         }
 
-        val start = result.indexOf('{')
-        val end = result.lastIndexOf('}')
+        if (
+            result.endsWith("```")
+        ) {
+            result =
+                result
+                    .removeSuffix("```")
+                    .trim()
+        }
 
-        if (start >= 0 && end > start) {
-            result = result.substring(
-                start,
-                end + 1
-            )
+        val start =
+            result.indexOf('{')
+
+        val end =
+            result.lastIndexOf('}')
+
+        if (
+            start >= 0 &&
+            end > start
+        ) {
+            result =
+                result.substring(
+                    start,
+                    end + 1
+                )
         }
 
         return result
     }
 
-    private fun quote(value: String): String {
+    private fun quote(
+        value: String
+    ): String {
+
         return buildString {
+
             append('"')
 
             value.forEach { char ->
+
                 when (char) {
-                    '\\' -> append("\\\\")
-                    '"' -> append("\\\"")
-                    '\n' -> append("\\n")
-                    '\r' -> append("\\r")
-                    '\t' -> append("\\t")
-                    else -> append(char)
+
+                    '\\' ->
+                        append("\\\\")
+
+                    '"' ->
+                        append("\\\"")
+
+                    '\n' ->
+                        append("\\n")
+
+                    '\r' ->
+                        append("\\r")
+
+                    '\t' ->
+                        append("\\t")
+
+                    else ->
+                        append(char)
                 }
             }
 
@@ -187,8 +289,10 @@ class AiService {
     }
 
     private fun unknownCommand(): AiCommand {
+
         return AiCommand(
-            intent = AiCommand.IntentType.UNKNOWN
+            intent =
+                AiCommand.IntentType.UNKNOWN
         )
     }
 }

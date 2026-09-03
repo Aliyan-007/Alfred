@@ -9,13 +9,10 @@ object AiCommandMapper {
         originalText: String
     ): CommandIntent {
 
-        return when (
-            command.intent
-        ) {
+        return when (command.intent) {
 
             AiCommand.IntentType.BATTERY ->
                 CommandIntent.Battery
-
 
             AiCommand.IntentType.FLASHLIGHT -> {
 
@@ -30,13 +27,10 @@ object AiCommandMapper {
                 )
             }
 
-
             AiCommand.IntentType.VOLUME -> {
 
                 val direction =
-                    when (
-                        command.direction
-                    ) {
+                    when (command.direction) {
 
                         AiCommand.Direction.UP ->
                             CommandIntent.Volume.Direction.UP
@@ -58,17 +52,13 @@ object AiCommandMapper {
                 )
             }
 
-
             AiCommand.IntentType.OPEN_SETTINGS ->
                 CommandIntent.OpenSettings
-
 
             AiCommand.IntentType.OPEN_APP -> {
 
                 val app =
-                    when (
-                        command.app
-                    ) {
+                    when (command.app) {
 
                         AiCommand.AppType.YOUTUBE ->
                             CommandIntent.App.YOUTUBE
@@ -90,7 +80,6 @@ object AiCommandMapper {
                 )
             }
 
-
             AiCommand.IntentType.YOUTUBE_SEARCH -> {
 
                 val query =
@@ -110,7 +99,6 @@ object AiCommandMapper {
                     )
                 }
             }
-
 
             AiCommand.IntentType.WEB_SEARCH -> {
 
@@ -132,7 +120,6 @@ object AiCommandMapper {
                 }
             }
 
-
             AiCommand.IntentType.SPOTIFY_SEARCH -> {
 
                 val query =
@@ -153,13 +140,10 @@ object AiCommandMapper {
                 }
             }
 
-
             AiCommand.IntentType.MESSAGE -> {
 
                 val channel =
-                    when (
-                        command.channel
-                    ) {
+                    when (command.channel) {
 
                         AiCommand.ChannelType.SMS ->
                             CommandIntent.Message.Channel.SMS
@@ -200,14 +184,11 @@ object AiCommandMapper {
                 }
             }
 
-
             AiCommand.IntentType.GREETING ->
                 CommandIntent.Greeting
 
-
             AiCommand.IntentType.HELP ->
                 CommandIntent.Help
-
 
             AiCommand.IntentType.UNKNOWN ->
                 CommandIntent.Unknown(

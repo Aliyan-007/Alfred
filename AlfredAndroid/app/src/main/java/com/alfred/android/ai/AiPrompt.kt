@@ -19,6 +19,11 @@ IMPORTANT RULES:
 7. Understand English, Roman Urdu, Urdu-English mixed speech, and common speech-to-text mistakes.
 8. Treat different wording with the same meaning as the same command.
 9. The output must be valid JSON.
+10. ENUM VALUES ARE CASE-SENSITIVE.
+11. Always use the EXACT UPPERCASE enum values defined below.
+12. Never return lowercase enum values.
+13. Return every field in the schema.
+14. Use null for optional fields that are not required by the selected command.
 
 AiCommand schema:
 
@@ -59,7 +64,7 @@ Output:
 }
 
 FLASHLIGHT:
-Use when the user wants to turn the flashlight on or off.
+Use when the user wants to turn the flashlight or torch on or off.
 
 Examples:
 "flashlight on karo"
@@ -141,6 +146,19 @@ Examples:
 "open settings"
 "android settings open karo"
 
+Output:
+{
+  "intent": "OPEN_SETTINGS",
+  "direction": null,
+  "amount": null,
+  "enabled": null,
+  "app": null,
+  "channel": null,
+  "contactName": null,
+  "message": null,
+  "query": null
+}
+
 OPEN_APP:
 Use when the user wants to open an application.
 
@@ -154,6 +172,8 @@ Examples:
 "open youtube"
 "whatsapp open karo"
 "spotify chalao"
+
+Output must contain the correct app field.
 
 YOUTUBE_SEARCH:
 Use when the user wants to search for something on YouTube.

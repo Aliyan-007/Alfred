@@ -39,6 +39,9 @@
     <uses-permission
         android:name="android.permission.RECORD_AUDIO" />
 
+    <uses-permission
+        android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
 
     <!-- Device -->
 
@@ -69,9 +72,6 @@
     <uses-permission
         android:name="android.permission.FLASHLIGHT" />
 
-    <uses-permission
-        android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-
 
     <!-- Contacts -->
 
@@ -86,25 +86,53 @@
         tools:ignore="QueryAllPackagesPermission" />
 
 
+    <!-- Speech recognition service -->
+
+    <queries>
+
+        <intent>
+
+            <action
+                android:name="android.speech.RecognitionService" />
+
+        </intent>
+
+    </queries>
+
+
     <application
+
         android:name=".AlfredApplication"
+
         android:allowBackup="false"
+
         android:dataExtractionRules="@xml/data_extraction_rules"
+
         android:fullBackupContent="@xml/backup_rules"
+
         android:icon="@mipmap/ic_launcher"
+
         android:label="@string/app_name"
+
         android:roundIcon="@mipmap/ic_launcher_round"
+
         android:supportsRtl="true"
+
         android:theme="@style/Theme.Alfred"
+
         tools:targetApi="34">
 
 
         <!-- Main UI -->
 
         <activity
+
             android:name=".MainActivity"
+
             android:exported="true"
+
             android:label="@string/app_name"
+
             android:theme="@style/Theme.Alfred">
 
             <intent-filter>
@@ -120,23 +148,41 @@
         </activity>
 
 
-        <!-- Main Alfred background service -->
+        <!--
+            MAIN ALFRED BACKGROUND SERVICE
+
+            Normal mode:
+                dataSync
+
+            Voice mode:
+                dataSync + microphone
+        -->
 
         <service
+
             android:name=".service.AlfredAgentService"
+
             android:enabled="true"
+
             android:exported="false"
+
             android:stopWithTask="false"
+
             android:foregroundServiceType="dataSync|microphone" />
 
 
         <!-- Accessibility -->
 
         <service
+
             android:name=".capabilities.accessibility.AlfredAccessibilityService"
+
             android:enabled="true"
+
             android:exported="false"
+
             android:label="@string/accessibility_service_label"
+
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
 
             <intent-filter>
@@ -147,17 +193,22 @@
             </intent-filter>
 
             <meta-data
+
                 android:name="android.accessibilityservice"
+
                 android:resource="@xml/accessibility_service_config" />
 
         </service>
 
 
-        <!-- Boot -->
+        <!-- Boot receiver -->
 
         <receiver
+
             android:name=".events.BootReceiver"
+
             android:enabled="true"
+
             android:exported="true">
 
             <intent-filter>
@@ -168,6 +219,7 @@
             </intent-filter>
 
         </receiver>
+
 
     </application>
 

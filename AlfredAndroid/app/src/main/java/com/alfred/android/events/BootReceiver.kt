@@ -3,18 +3,11 @@ package com.alfred.android.events
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.alfred.android.service.AlfredAgentService
-import com.alfred.android.storage.SettingsRepository
 import com.alfred.android.util.Logger
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 
 class BootReceiver : BroadcastReceiver() {
 
-    private val tag =
-        "ALFRED-Boot"
+    private val tag = "ALFRED-Boot"
 
     override fun onReceive(
         context: Context,
@@ -28,78 +21,31 @@ class BootReceiver : BroadcastReceiver() {
             return
         }
 
-        val pending =
-            goAsync()
+        val prefs =
+            context.getSharedPreferences(
+                "alfred_service_prefs",
+                Context.MODE_PRIVATE
+            )
 
-        CoroutineScope(
-            Dispatchers.Default
-        ).launch {
+        val serviceEnabled =
+            prefs.getBoolean(
+                "service_enabled",
+                false
+            )
 
-            try {
+        if (serviceEnabled) {
 
-                val prefs =
-                    context.getSharedPreferences(
-                        "alfred_service_prefs",
-                        Context.MODE_PRIVATE
-                    )
+            Logger.i(
+                tag,
+                "Device boot completed. ALFRED is enabled; waiting for user-visible startup."
+            )
 
-                val serviceEnabled =
-                    prefs.getBoolean(
-                        "service_enabled",
-                        false
-                    )
+        } else {
 
-                if (
-                    !serviceEnabled
-                ) {
-                    return@launch
-                }
-
-                val settings =
-                    SettingsRepository(
-                        context
-                    )
-                        .settings
-                        .first()
-
-                if (
-                    settings.hubUrl.isBlank()
-                ) {
-                    return@launch
-                }
-
-                Logger.i(
-                    tag,
-                    "Restarting ALFRED agent after boot"
-                )
-
-                /*
-                 * Start the normal data-sync foreground
-                 * service.
-                 *
-                 * We intentionally do NOT start microphone
-                 * mode from BOOT_COMPLETED because modern
-                 * Android restricts microphone foreground
-                 * service startup from the background.
-                 */
-
-                AlfredAgentService.start(
-                    context
-                )
-
-            } catch (
-                exception: Exception
-            ) {
-
-                Logger.i(
-                    tag,
-                    "Boot restart failed: ${exception.message}"
-                )
-
-            } finally {
-
-                pending.finish()
-            }
+            Logger.i(
+                tag,
+                "Device boot completed. ALFRED service is disabled."
+            )
         }
     }
 }

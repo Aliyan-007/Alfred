@@ -1,7 +1,6 @@
 package com.alfred.android.viewmodel
 
 import android.app.Application
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -70,12 +69,18 @@ class DashboardViewModel(
         StateFlow<List<LogEntry>> =
         _logs.asStateFlow()
 
+    /*
+     * The foreground service is the source of truth
+     * for whether ALFRED is actually running.
+     *
+     * The preference only remembers the user's choice
+     * across app/device lifecycle.
+     */
     private val _serviceRunning =
         MutableStateFlow(
-            servicePrefs.getBoolean(
-                "service_enabled",
-                false
-            )
+            AlfredAgentService
+                .serviceRunning
+                .value
         )
 
     val uiState:
@@ -86,7 +91,7 @@ class DashboardViewModel(
             agent.paired,
             agent.lastCommand,
             agent.lastResult,
-            _serviceRunning,
+            AlfredAgentService.serviceRunning,
             settingsRepository.settings,
             AlfredAgentService.voiceListening,
             AlfredAgentService.lastVoiceText,
@@ -148,6 +153,11 @@ class DashboardViewModel(
         observeServiceState()
     }
 
+    /*
+     * The ViewModel observes service state.
+     *
+     * It does not own the VoiceAssistant.
+     */
     private fun observeServiceState() {
 
         viewModelScope.launch {
@@ -162,6 +172,10 @@ class DashboardViewModel(
         }
     }
 
+    /*
+     * Voice control is delegated completely to
+     * AlfredAgentService.
+     */
     fun toggleVoiceListening() {
 
         if (
@@ -453,9 +467,6 @@ class DashboardViewModel(
             )
             .apply()
 
-        _serviceRunning.value =
-            true
-
         logInfo(
             "Starting Alfred Agent..."
         )
@@ -474,9 +485,6 @@ class DashboardViewModel(
                 false
             )
             .apply()
-
-        _serviceRunning.value =
-            false
 
         logInfo(
             "Stopping Alfred Agent..."

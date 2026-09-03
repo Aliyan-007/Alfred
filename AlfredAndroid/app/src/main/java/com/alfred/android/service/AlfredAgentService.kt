@@ -1,5 +1,6 @@
 package com.alfred.android.service
 
+import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,8 +8,12 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import com.alfred.android.AlfredApplication
 import com.alfred.android.MainActivity
@@ -36,13 +41,20 @@ class AlfredAgentService : Service() {
                 Dispatchers.Default
         )
 
-    private lateinit var agent: AlfredAgent
+    private val mainHandler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
-    private var voiceAssistant: VoiceAssistant? = null
+    private lateinit var agent: AlfredAgent
 
     private lateinit var commandProcessor: LocalCommandProcessor
 
+    private var voiceAssistant: VoiceAssistant? = null
+
     private var started = false
+
+    private var voiceModeActive = false
 
     override fun onCreate() {
 
@@ -51,9 +63,17 @@ class AlfredAgentService : Service() {
         val app =
             applicationContext as AlfredApplication
 
+        /*
+         * Use the single AlfredAgent instance owned by
+         * the application container.
+         */
         agent =
             app.container.agent
 
+        /*
+         * AI + local command processing belongs to
+         * the background service, NOT DashboardViewModel.
+         */
         commandProcessor =
             LocalCommandProcessor(
                 context = applicationContext,
@@ -61,12 +81,17 @@ class AlfredAgentService : Service() {
                 aiService = AiService()
             )
 
-        createVoiceAssistant()
-
         ensureNotificationChannel()
 
+        /*
+         * The service has been created, but we still
+         * make sure the notification is shown quickly
+         * when the service is started.
+         */
         _serviceRunning.value = true
-        _serviceStatus.value = "Starting ALFRED..."
+
+        _serviceStatus.value =
+            "Starting ALFRED..."
     }
 
     override fun onStartCommand(
@@ -92,23 +117,47 @@ class AlfredAgentService : Service() {
 
             ACTION_START_VOICE -> {
 
-                startVoiceListening()
+                /*
+                 * Make sure the service is foreground
+                 * BEFORE doing microphone work.
+                 */
+                promoteToForeground(
+                    microphone = true
+                )
 
+                if (!started) {
+
+                    started = true
+
+                    startAgent()
+                }
+
+                startVoiceListening()
             }
 
             ACTION_STOP_VOICE -> {
 
                 stopVoiceListening()
 
+                /*
+                 * Once voice mode stops, return the
+                 * foreground service to normal data-sync mode.
+                 */
+                if (started) {
+
+                    promoteToForeground(
+                        microphone = false
+                    )
+                }
             }
 
             else -> {
 
-                startForeground(
-                    Constants.NOTIF_ID_CONNECTION,
-                    buildNotification(
-                        _serviceStatus.value
-                    )
+                /*
+                 * Normal ALFRED background mode.
+                 */
+                promoteToForeground(
+                    microphone = false
                 )
 
                 if (!started) {
@@ -123,11 +172,75 @@ class AlfredAgentService : Service() {
         return START_STICKY
     }
 
+    /**
+     * Promotes ALFRED to the correct foreground-service type.
+     *
+     * Normal mode:
+     *     DATA_SYNC
+     *
+     * Voice mode:
+     *     DATA_SYNC + MICROPHONE
+     */
+    private fun promoteToForeground(
+        microphone: Boolean
+    ) {
+
+        val notificationText =
+            if (microphone) {
+                "Voice assistant active"
+            } else {
+                _serviceStatus.value
+            }
+
+        val notification =
+            buildNotification(
+                notificationText
+            )
+
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.Q
+        ) {
+
+            var serviceType =
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+
+            if (microphone) {
+
+                serviceType =
+                    serviceType or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            }
+
+            startForeground(
+                Constants.NOTIF_ID_CONNECTION,
+                notification,
+                serviceType
+            )
+
+        } else {
+
+            startForeground(
+                Constants.NOTIF_ID_CONNECTION,
+                notification
+            )
+        }
+
+        voiceModeActive =
+            microphone
+    }
+
+    /**
+     * Starts connection to the ALFRED Hub.
+     */
     private fun startAgent() {
 
         val app =
             applicationContext as AlfredApplication
 
+        /*
+         * Observe settings and connect to the Hub.
+         */
         serviceScope.launch {
 
             app.container.settingsRepository
@@ -167,6 +280,10 @@ class AlfredAgentService : Service() {
                 }
         }
 
+        /*
+         * Keep notification status synchronized
+         * with the actual agent connection.
+         */
         serviceScope.launch {
 
             agent.connectionState
@@ -179,55 +296,75 @@ class AlfredAgentService : Service() {
         }
     }
 
+    /**
+     * Creates the VoiceAssistant on the main thread.
+     *
+     * SpeechRecognizer and TextToSpeech are UI/main-thread
+     * oriented Android APIs.
+     */
     private fun createVoiceAssistant() {
 
-        voiceAssistant =
-            VoiceAssistant(
-                context = applicationContext,
+        mainHandler.post {
 
-                onListeningChanged = { listening ->
+            if (
+                voiceAssistant != null
+            ) {
+                return@post
+            }
 
-                    _voiceListening.value =
-                        listening
+            voiceAssistant =
+                VoiceAssistant(
 
-                    _voiceStatus.value =
-                        if (listening) {
-                            "Listening..."
-                        } else {
-                            "Ready"
-                        }
+                    context =
+                        applicationContext,
 
-                    updateVoiceNotification()
-                },
+                    onListeningChanged = { listening ->
 
-                onResult = { text ->
+                        _voiceListening.value =
+                            listening
 
-                    _lastVoiceText.value =
-                        text
+                        _voiceStatus.value =
+                            if (listening) {
+                                "Listening..."
+                            } else {
+                                "Ready"
+                            }
 
-                    _voiceStatus.value =
-                        "Processing..."
+                        updateVoiceNotification()
+                    },
 
-                    updateVoiceNotification()
+                    onResult = { text ->
 
-                    executeVoiceCommand(
-                        text
-                    )
-                },
+                        _lastVoiceText.value =
+                            text
 
-                onError = { error ->
+                        _voiceStatus.value =
+                            "Processing..."
 
-                    _voiceListening.value =
-                        false
+                        updateVoiceNotification()
 
-                    _voiceStatus.value =
-                        error
+                        executeVoiceCommand(
+                            text
+                        )
+                    },
 
-                    updateVoiceNotification()
-                }
-            )
+                    onError = { error ->
+
+                        _voiceListening.value =
+                            false
+
+                        _voiceStatus.value =
+                            error
+
+                        updateVoiceNotification()
+                    }
+                )
+        }
     }
 
+    /**
+     * Starts microphone recognition.
+     */
     private fun startVoiceListening() {
 
         if (!hasMicrophonePermission()) {
@@ -240,17 +377,31 @@ class AlfredAgentService : Service() {
             return
         }
 
+        /*
+         * VoiceAssistant is created on the main thread.
+         */
+        createVoiceAssistant()
+
         _voiceStatus.value =
             "Starting microphone..."
 
         updateVoiceNotification()
 
-        voiceAssistant?.startListening()
+        mainHandler.post {
+
+            voiceAssistant?.startListening()
+        }
     }
 
+    /**
+     * Stops the current recognition session.
+     */
     private fun stopVoiceListening() {
 
-        voiceAssistant?.stopListening()
+        mainHandler.post {
+
+            voiceAssistant?.stopListening()
+        }
 
         _voiceListening.value =
             false
@@ -261,6 +412,19 @@ class AlfredAgentService : Service() {
         updateVoiceNotification()
     }
 
+    /**
+     * Processes the spoken command through:
+     *
+     * Voice
+     *   ↓
+     * LocalCommandProcessor
+     *   ↓
+     * AiService
+     *   ↓
+     * AiCommandMapper
+     *   ↓
+     * Android action
+     */
     private fun executeVoiceCommand(
         text: String
     ) {
@@ -279,9 +443,15 @@ class AlfredAgentService : Service() {
 
                 updateVoiceNotification()
 
-                voiceAssistant?.speak(
-                    response
-                )
+                /*
+                 * TTS must run on the main thread.
+                 */
+                mainHandler.post {
+
+                    voiceAssistant?.speak(
+                        response
+                    )
+                }
 
             } catch (
                 error: Exception
@@ -298,14 +468,19 @@ class AlfredAgentService : Service() {
     private fun hasMicrophonePermission(): Boolean {
 
         return checkSelfPermission(
-            android.Manifest.permission.RECORD_AUDIO
+            Manifest.permission.RECORD_AUDIO
         ) ==
-            android.content.pm.PackageManager.PERMISSION_GRANTED
+            PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * Completely stops ALFRED.
+     */
     private fun stopAgent() {
 
         started = false
+
+        voiceModeActive = false
 
         stopVoiceListening()
 
@@ -322,10 +497,17 @@ class AlfredAgentService : Service() {
 
         started = false
 
-        voiceAssistant?.destroy()
+        voiceModeActive = false
 
-        voiceAssistant =
-            null
+        /*
+         * Destroy SpeechRecognizer/TTS on the main thread.
+         */
+        mainHandler.post {
+
+            voiceAssistant?.destroy()
+
+            voiceAssistant = null
+        }
 
         agent.stop()
 
@@ -343,44 +525,24 @@ class AlfredAgentService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * If Android removes ALFRED's task from Recents,
+     * do NOT immediately restart microphone mode.
+     *
+     * The foreground service itself is what keeps ALFRED
+     * alive. We only allow Android/service lifecycle to
+     * handle recovery.
+     */
     override fun onTaskRemoved(
         rootIntent: Intent?
     ) {
 
-        if (
-            getSharedPreferences(
-                PREFS_NAME,
-                Context.MODE_PRIVATE
-            ).getBoolean(
-                PREF_SERVICE_ENABLED,
-                false
-            )
-        ) {
-
-            val restartIntent =
-                Intent(
-                    applicationContext,
-                    AlfredAgentService::class.java
-                )
-
-            if (
-                Build.VERSION.SDK_INT >=
-                Build.VERSION_CODES.O
-            ) {
-
-                applicationContext
-                    .startForegroundService(
-                        restartIntent
-                    )
-
-            } else {
-
-                applicationContext
-                    .startService(
-                        restartIntent
-                    )
-            }
-        }
+        /*
+         * Intentionally no manual restart here.
+         *
+         * This avoids creating background-start violations
+         * on newer Android versions.
+         */
 
         super.onTaskRemoved(
             rootIntent
@@ -394,6 +556,9 @@ class AlfredAgentService : Service() {
         return null
     }
 
+    /**
+     * Creates the persistent ALFRED notification.
+     */
     private fun buildNotification(
         text: String
     ): Notification {
@@ -405,7 +570,8 @@ class AlfredAgentService : Service() {
             ).apply {
 
                 flags =
-                    Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
             }
 
         val openPendingIntent =
@@ -436,12 +602,19 @@ class AlfredAgentService : Service() {
                     PendingIntent.FLAG_UPDATE_CURRENT
             )
 
+        val title =
+            if (voiceModeActive) {
+                "ALFRED • Voice Active"
+            } else {
+                "ALFRED"
+            }
+
         return NotificationCompat.Builder(
             this,
             Constants.NOTIF_CHANNEL_CONNECTION
         )
             .setContentTitle(
-                "ALFRED"
+                title
             )
             .setContentText(
                 text
@@ -454,6 +627,9 @@ class AlfredAgentService : Service() {
             )
             .setContentIntent(
                 openPendingIntent
+            )
+            .setCategory(
+                NotificationCompat.CATEGORY_SERVICE
             )
             .addAction(
                 0,
@@ -496,9 +672,16 @@ class AlfredAgentService : Service() {
         _serviceStatus.value =
             status
 
-        updateNotification(
-            status
-        )
+        /*
+         * Don't replace a voice-specific notification
+         * with a generic connection status.
+         */
+        if (!voiceModeActive) {
+
+            updateNotification(
+                status
+            )
+        }
     }
 
     private fun updateVoiceNotification() {
@@ -522,6 +705,9 @@ class AlfredAgentService : Service() {
         )
     }
 
+    /**
+     * Creates ALFRED's persistent notification channel.
+     */
     private fun ensureNotificationChannel() {
 
         if (
@@ -603,6 +789,9 @@ class AlfredAgentService : Service() {
             StateFlow<String> =
             _serviceStatus.asStateFlow()
 
+        /**
+         * Starts normal background ALFRED.
+         */
         fun start(
             context: Context
         ) {
@@ -642,6 +831,9 @@ class AlfredAgentService : Service() {
             }
         }
 
+        /**
+         * Completely stops ALFRED.
+         */
         fun stop(
             context: Context
         ) {
@@ -685,9 +877,27 @@ class AlfredAgentService : Service() {
             }
         }
 
+        /**
+         * Starts background voice mode.
+         *
+         * This also starts the service if it isn't
+         * already running.
+         */
         fun startVoice(
             context: Context
         ) {
+
+            context
+                .getSharedPreferences(
+                    PREFS_NAME,
+                    Context.MODE_PRIVATE
+                )
+                .edit()
+                .putBoolean(
+                    PREF_SERVICE_ENABLED,
+                    true
+                )
+                .apply()
 
             val intent =
                 Intent(
@@ -716,6 +926,10 @@ class AlfredAgentService : Service() {
             }
         }
 
+        /**
+         * Stops voice recognition but leaves
+         * ALFRED itself running.
+         */
         fun stopVoice(
             context: Context
         ) {
