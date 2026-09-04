@@ -191,6 +191,9 @@ dependencies {
         libs.okhttp
     )
 
+    // Local offline wake-word detection
+    implementation(libs.openwakeword)
+
     // Security
     implementation(
         libs.androidx.security.crypto

@@ -16,6 +16,7 @@ androidxTestExtJunit = "1.2.1"
 espresso = "3.6.1"
 mockitoCore = "5.12.0"
 mockitoKotlin = "5.3.1"
+openWakeWord = "0.1.3"
 
 [libraries]
 okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
@@ -39,6 +40,7 @@ androidx-security-crypto = { group = "androidx.security", name = "security-crypt
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockito-core = { group = "org.mockito", name = "mockito-core", version.ref = "mockitoCore" }
 mockito-kotlin = { group = "org.mockito.kotlin", name = "mockito-kotlin", version.ref = "mockitoKotlin" }
+openwakeword = { group = "xyz.rementia", name = "openwakeword", version.ref = "openWakeWord" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "kotlinxCoroutines" }
 androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExtJunit" }
 androidx-test-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso" }

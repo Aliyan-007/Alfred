@@ -11,11 +11,16 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import androidx.core.content.ContextCompat
+import com.alfred.android.voice.wake.WakeWordEngine
 import java.util.Locale
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 class VoiceAssistant(
     private val context: Context,
+    private val wakeWordEngine: WakeWordEngine,
     private val onListeningChanged: (Boolean) -> Unit,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
@@ -25,661 +30,251 @@ class VoiceAssistant(
     private enum class ListeningMode {
         IDLE,
         WAKE_WORD,
-        COMMAND
+        COMMAND,
     }
 
     private var speechRecognizer: SpeechRecognizer? = null
-
     private var textToSpeech: TextToSpeech? = null
-
     private var ttsReady = false
-
     private var isListening = false
-
-    private var listeningMode =
-        ListeningMode.IDLE
-
+    private var listeningMode = ListeningMode.IDLE
     private var destroyed = false
-
-    private val mainHandler =
-        Handler(
-            Looper.getMainLooper()
-        )
+    private val utteranceCallbacks = ConcurrentHashMap<String, () -> Unit>()
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     init {
-
-        textToSpeech =
-            TextToSpeech(
-                context.applicationContext,
-                this
-            )
+        textToSpeech = TextToSpeech(context.applicationContext, this)
     }
 
-    override fun onInit(
-        status: Int
-    ) {
+    override fun onInit(status: Int) {
+        if (status != TextToSpeech.SUCCESS) return
 
-        if (
-            status == TextToSpeech.SUCCESS
-        ) {
-
-            ttsReady = true
-
-            textToSpeech?.language =
-                Locale.US
-
-            textToSpeech?.setSpeechRate(
-                1.0f
-            )
-
-            textToSpeech?.setPitch(
-                1.0f
-            )
-        }
+        ttsReady = true
+        configureBritishMaleVoice()
+        textToSpeech?.setSpeechRate(0.96f)
+        textToSpeech?.setPitch(0.98f)
+        textToSpeech?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) = Unit
+            override fun onDone(utteranceId: String?) = finishUtterance(utteranceId)
+            @Deprecated("Deprecated in Android API")
+            override fun onError(utteranceId: String?) = finishUtterance(utteranceId)
+            override fun onError(utteranceId: String?, errorCode: Int) = finishUtterance(utteranceId)
+        })
     }
 
-    /**
-     * Starts wake-word mode.
-     *
-     * The recognizer continuously listens for
-     * "Alfred", "Hey Alfred", etc.
-     */
+    /** Starts genuine local wake-word detection. SpeechRecognizer is NOT used here. */
     fun startWakeWordListening() {
-
-        if (destroyed) {
-            return
-        }
-
+        if (destroyed) return
         if (!hasMicrophonePermission()) {
-
-            onError(
-                "Microphone permission is not granted"
-            )
-
-            return
-        }
-
-        if (
-            !SpeechRecognizer.isRecognitionAvailable(
-                context
-            )
-        ) {
-
-            onError(
-                "Speech recognition is not available on this phone"
-            )
-
-            return
-        }
-
-        listeningMode =
-            ListeningMode.WAKE_WORD
-
-        startRecognition()
-    }
-
-    /**
-     * Starts normal command listening.
-     */
-    fun startCommandListening() {
-
-        if (destroyed) {
-            return
-        }
-
-        if (!hasMicrophonePermission()) {
-
-            onError(
-                "Microphone permission is not granted"
-            )
-
-            return
-        }
-
-        if (
-            !SpeechRecognizer.isRecognitionAvailable(
-                context
-            )
-        ) {
-
-            onError(
-                "Speech recognition is not available on this phone"
-            )
-
-            return
-        }
-
-        listeningMode =
-            ListeningMode.COMMAND
-
-        startRecognition()
-    }
-
-    /**
-     * Kept for compatibility with the existing service.
-     *
-     * continuous=true now means command listening
-     * that restarts after every recognition result.
-     */
-    fun startListening(
-        continuous: Boolean = false
-    ) {
-
-        if (continuous) {
-
-            startCommandListening()
-
-        } else {
-
-            startCommandListening()
-        }
-    }
-
-    private fun startRecognition() {
-
-        if (
-            destroyed ||
-            listeningMode == ListeningMode.IDLE
-        ) {
+            onError("Microphone permission is not granted")
             return
         }
 
         stopRecognizerOnly()
-
-        speechRecognizer =
-            SpeechRecognizer.createSpeechRecognizer(
-                context
-            )
-
-        speechRecognizer?.setRecognitionListener(
-            object : RecognitionListener {
-
-                override fun onReadyForSpeech(
-                    params: Bundle?
-                ) {
-
-                    isListening = true
-
-                    onListeningChanged(
-                        true
-                    )
-                }
-
-                override fun onBeginningOfSpeech() {
-                }
-
-                override fun onRmsChanged(
-                    rmsdB: Float
-                ) {
-                }
-
-                override fun onBufferReceived(
-                    buffer: ByteArray?
-                ) {
-                }
-
-                override fun onEndOfSpeech() {
-
-                    isListening = false
-
-                    onListeningChanged(
-                        false
-                    )
-                }
-
-                override fun onError(
-                    error: Int
-                ) {
-
-                    isListening = false
-
-                    onListeningChanged(
-                        false
-                    )
-
-                    if (destroyed) {
-                        return
-                    }
-
-                    val message =
-                        recognitionErrorMessage(
-                            error
-                        )
-
-                    when (
-                        listeningMode
-                    ) {
-
-                        ListeningMode.WAKE_WORD -> {
-
-                            /*
-                             * Wake mode should keep
-                             * listening after normal
-                             * recognition errors.
-                             */
-                            if (
-                                error !=
-                                SpeechRecognizer.ERROR_CLIENT
-                            ) {
-
-                                restartRecognition()
-                            }
-                        }
-
-                        ListeningMode.COMMAND -> {
-
-                            onError(
-                                message
-                            )
-                        }
-
-                        ListeningMode.IDLE -> {
-                        }
-                    }
-                }
-
-                override fun onResults(
-                    results: Bundle?
-                ) {
-
-                    isListening = false
-
-                    onListeningChanged(
-                        false
-                    )
-
-                    val matches =
-                        results?.getStringArrayList(
-                            SpeechRecognizer.RESULTS_RECOGNITION
-                        )
-
-                    val text =
-                        matches
-                            ?.firstOrNull()
-                            ?.trim()
-                            .orEmpty()
-
-                    when (
-                        listeningMode
-                    ) {
-
-                        ListeningMode.WAKE_WORD -> {
-
-                            if (
-                                containsWakeWord(
-                                    text
-                                )
-                            ) {
-
-                                android.util.Log.i(
-                                    TAG,
-                                    "Wake word detected: $text"
-                                )
-
-                                /*
-                                 * Stop wake recognition
-                                 * before handing control
-                                 * to command mode.
-                                 */
-                                stopRecognizerOnly()
-
-                                onWakeWordDetected()
-
-                            } else {
-
-                                /*
-                                 * Nothing relevant.
-                                 * Continue waiting for
-                                 * Alfred.
-                                 */
-                                restartRecognition()
-                            }
-                        }
-
-                        ListeningMode.COMMAND -> {
-
-                            if (
-                                text.isBlank()
-                            ) {
-
-                                onError(
-                                    "I did not hear anything"
-                                )
-
-                                return
-                            }
-
-                            onResult(
-                                text
-                            )
-                        }
-
-                        ListeningMode.IDLE -> {
-                        }
-                    }
-                }
-
-                override fun onPartialResults(
-                    partialResults: Bundle?
-                ) {
-                }
-
-                override fun onEvent(
-                    eventType: Int,
-                    params: Bundle?
-                ) {
-                }
-            }
-        )
-
-        val intent =
-            Intent(
-                RecognizerIntent.ACTION_RECOGNIZE_SPEECH
-            ).apply {
-
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_MODEL,
-                    RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
-                )
-
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE,
-                    Locale.getDefault()
-                )
-
-                putExtra(
-                    RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE,
-                    Locale.getDefault()
-                )
-
-                /*
-                 * We only need the final result.
-                 */
-                putExtra(
-                    RecognizerIntent.EXTRA_PARTIAL_RESULTS,
-                    false
-                )
-
-                putExtra(
-                    RecognizerIntent.EXTRA_MAX_RESULTS,
-                    3
-                )
-            }
-
-        try {
-
-            speechRecognizer?.startListening(
-                intent
-            )
-
-        } catch (
-            error: Exception
-        ) {
-
-            android.util.Log.e(
-                TAG,
-                "Failed to start SpeechRecognizer",
-                error
-            )
-
-            isListening = false
-
-            onListeningChanged(
-                false
-            )
-
-            onError(
-                error.message
-                    ?: "Could not start voice recognition"
-            )
-        }
+        listeningMode = ListeningMode.WAKE_WORD
+        isListening = false
+        onListeningChanged(false)
+        wakeWordEngine.start()
     }
 
-    private fun containsWakeWord(
-        text: String
-    ): Boolean {
-
-        if (text.isBlank()) {
-            return false
+    /** Starts normal speech recognition after the wake word or during a conversation. */
+    fun startCommandListening() {
+        if (destroyed) return
+        if (!hasMicrophonePermission()) {
+            onError("Microphone permission is not granted")
+            return
         }
-
-        val normalized =
-            text
-                .lowercase(Locale.US)
-                .replace(
-                    Regex("[^a-z0-9 ]"),
-                    " "
-                )
-                .replace(
-                    Regex("\\s+"),
-                    " "
-                )
-                .trim()
-
-        if (normalized.isBlank()) {
-            return false
-        }
-
-        val words =
-            normalized.split(" ")
-
-        /*
-         * Accept:
-         *
-         * Alfred
-         * hey Alfred
-         * hello Alfred
-         * okay Alfred
-         * hi Alfred
-         *
-         * Also tolerates common STT variations.
-         */
-        val wakeWords =
-            setOf(
-                "alfred",
-                "alford",
-                "alfred",
-                "alfred"
-            )
-
-        return words.any { word ->
-            word in wakeWords
-        }
-    }
-
-    private fun restartRecognition() {
-
-        if (
-            destroyed ||
-            listeningMode == ListeningMode.IDLE
-        ) {
+        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
+            onError("Speech recognition is not available on this phone")
             return
         }
 
-        mainHandler.postDelayed(
-            {
+        wakeWordEngine.stop()
+        listeningMode = ListeningMode.COMMAND
+        startRecognition()
+    }
 
-                if (
-                    !destroyed &&
-                    listeningMode !=
-                    ListeningMode.IDLE
-                ) {
+    /** Kept for compatibility with existing callers; it is command listening only. */
+    fun startListening(continuous: Boolean = false) = startCommandListening()
 
-                    startRecognition()
+    private fun startRecognition() {
+        if (destroyed || listeningMode != ListeningMode.COMMAND) return
+
+        stopRecognizerOnly()
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context)
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: Bundle?) {
+                isListening = true
+                onListeningChanged(true)
+            }
+
+            override fun onBeginningOfSpeech() = Unit
+            override fun onRmsChanged(rmsdB: Float) = Unit
+            override fun onBufferReceived(buffer: ByteArray?) = Unit
+
+            override fun onEndOfSpeech() {
+                isListening = false
+                onListeningChanged(false)
+            }
+
+            override fun onError(error: Int) {
+                isListening = false
+                onListeningChanged(false)
+                if (destroyed || listeningMode != ListeningMode.COMMAND) return
+                onError(recognitionErrorMessage(error))
+            }
+
+            override fun onResults(results: Bundle?) {
+                isListening = false
+                onListeningChanged(false)
+
+                val text = results
+                    ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull()
+                    ?.trim()
+                    .orEmpty()
+
+                if (listeningMode != ListeningMode.COMMAND) return
+                if (text.isBlank()) {
+                    onError("I did not hear anything")
+                    return
                 }
+                onResult(text)
+            }
 
-            },
-            500L
-        )
+            override fun onPartialResults(partialResults: Bundle?) = Unit
+            override fun onEvent(eventType: Int, params: Bundle?) = Unit
+        })
+
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
+        }
+
+        try {
+            speechRecognizer?.startListening(intent)
+        } catch (error: Exception) {
+            isListening = false
+            onListeningChanged(false)
+            onError(error.message ?: "Could not start voice recognition")
+        }
     }
 
     fun stopListening() {
-
-        listeningMode =
-            ListeningMode.IDLE
-
+        listeningMode = ListeningMode.IDLE
+        wakeWordEngine.stop()
         stopRecognizerOnly()
-
         isListening = false
-
-        onListeningChanged(
-            false
-        )
+        onListeningChanged(false)
     }
 
     private fun stopRecognizerOnly() {
-
-        try {
-
-            speechRecognizer?.stopListening()
-
-        } catch (
-            ignored: Exception
-        ) {
-        }
-
-        try {
-
-            speechRecognizer?.cancel()
-
-        } catch (
-            ignored: Exception
-        ) {
-        }
-
-        try {
-
-            speechRecognizer?.destroy()
-
-        } catch (
-            ignored: Exception
-        ) {
-        }
-
-        speechRecognizer =
-            null
+        try { speechRecognizer?.stopListening() } catch (_: Exception) { }
+        try { speechRecognizer?.cancel() } catch (_: Exception) { }
+        try { speechRecognizer?.destroy() } catch (_: Exception) { }
+        speechRecognizer = null
     }
 
-    fun speak(
-        text: String
-    ) {
-
-        if (
-            !ttsReady ||
-            text.isBlank() ||
-            destroyed
-        ) {
+    fun speak(text: String, onDone: (() -> Unit)? = null) {
+        if (text.isBlank() || destroyed) {
+            onDone?.invoke()
             return
         }
 
-        val cleanText =
-            cleanForSpeech(
-                text
-            )
-
-        if (
-            cleanText.isBlank()
-        ) {
+        val cleanText = cleanForSpeech(text)
+        if (cleanText.isBlank() || !ttsReady || textToSpeech == null) {
+            onDone?.invoke()
             return
         }
 
-        textToSpeech?.speak(
+        val utteranceId = "alfred-${UUID.randomUUID()}"
+        if (onDone != null) utteranceCallbacks[utteranceId] = onDone
+
+        val result = textToSpeech?.speak(
             cleanText,
             TextToSpeech.QUEUE_FLUSH,
             null,
-            "alfred_voice"
+            utteranceId,
         )
-    }
 
-    private fun cleanForSpeech(
-        text: String
-    ): String {
-
-        return text
-            .replace(
-                Regex("[^A-Za-z0-9 .,!?'-]"),
-                " "
-            )
-            .replace(
-                Regex("\\s+"),
-                " "
-            )
-            .trim()
-    }
-
-    private fun hasMicrophonePermission(): Boolean {
-
-        return ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.RECORD_AUDIO
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-
-    private fun recognitionErrorMessage(
-        error: Int
-    ): String {
-
-        return when (error) {
-
-            SpeechRecognizer.ERROR_AUDIO ->
-                "There was an audio problem"
-
-            SpeechRecognizer.ERROR_CLIENT ->
-                "Voice recognition stopped"
-
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
-                "Microphone permission is required"
-
-            SpeechRecognizer.ERROR_NETWORK ->
-                "A network error occurred"
-
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                "Voice recognition timed out"
-
-            SpeechRecognizer.ERROR_NO_MATCH ->
-                "I could not understand that"
-
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
-                "Voice recognition is busy"
-
-            SpeechRecognizer.ERROR_SERVER ->
-                "The speech recognition service had a problem"
-
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                "I did not hear anything"
-
-            else ->
-                "Voice recognition error"
+        if (result == TextToSpeech.ERROR) {
+            utteranceCallbacks.remove(utteranceId)
+            onDone?.invoke()
         }
     }
 
+    private fun finishUtterance(utteranceId: String?) {
+        if (utteranceId == null) return
+        utteranceCallbacks.remove(utteranceId)?.let { callback -> mainHandler.post(callback) }
+    }
+
+    private fun configureBritishMaleVoice() {
+        val tts = textToSpeech ?: return
+        val voices = runCatching { tts.voices }.getOrNull().orEmpty()
+        val britishVoices = voices.filter {
+            it.locale.language == Locale.UK.language && it.locale.country == Locale.UK.country
+        }
+        val maleHints = listOf("male", "alan", "arthur", "george", "rjs", "daniel")
+
+        val selected = britishVoices.sortedWith(
+            compareByDescending<android.speech.tts.Voice> { voice ->
+                val name = voice.name.lowercase(Locale.US)
+                maleHints.count { hint -> hint in name }
+            }.thenBy { it.isNetworkConnectionRequired }
+                .thenByDescending { it.quality }
+                .thenBy { it.latency }
+        ).firstOrNull()
+
+        if (selected != null) {
+            tts.setVoice(selected)
+            android.util.Log.i(TAG, "Selected British TTS voice: ${selected.name}")
+        } else {
+            tts.setLanguage(Locale.UK)
+            android.util.Log.w(TAG, "No dedicated British voice found; using en-GB fallback")
+        }
+    }
+
+    private fun cleanForSpeech(text: String): String = text
+        .replace(Regex("https?://\\S+"), "web link")
+        .replace(Regex("[^A-Za-z0-9 .,!?'-]"), " ")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
+    private fun hasMicrophonePermission(): Boolean =
+        ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) ==
+            PackageManager.PERMISSION_GRANTED
+
+    private fun recognitionErrorMessage(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_AUDIO -> "There was an audio problem"
+        SpeechRecognizer.ERROR_CLIENT -> "Voice recognition stopped"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "Microphone permission is required"
+        SpeechRecognizer.ERROR_NETWORK -> "A network error occurred"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "Voice recognition timed out"
+        SpeechRecognizer.ERROR_NO_MATCH -> "I could not understand that"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "Voice recognition is busy"
+        SpeechRecognizer.ERROR_SERVER -> "The speech recognition service had a problem"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "I did not hear anything"
+        else -> "Voice recognition error"
+    }
+
     fun destroy() {
-
         destroyed = true
-
-        listeningMode =
-            ListeningMode.IDLE
-
-        mainHandler.removeCallbacksAndMessages(
-            null
-        )
-
+        listeningMode = ListeningMode.IDLE
+        mainHandler.removeCallbacksAndMessages(null)
+        wakeWordEngine.release()
         stopRecognizerOnly()
-
         textToSpeech?.stop()
-
         textToSpeech?.shutdown()
-
         textToSpeech = null
-
         ttsReady = false
-
+        utteranceCallbacks.clear()
         isListening = false
     }
 
     companion object {
-
-        private const val TAG =
-            "ALFRED-Voice"
+        private const val TAG = "ALFRED-Voice"
     }
 }

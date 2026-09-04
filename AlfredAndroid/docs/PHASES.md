@@ -24,3 +24,13 @@
 | 19 Documentation | ✅ |
 
 OS limitations are reported honestly (brightness, media seek, cross-app alarm cancel, background clipboard read).
+
+## Phase 1.1 — Local Wake-Word Foundation
+
+- Added `WakeWordEngine` abstraction.
+- Added `OpenWakeWordEngineAdapter` using on-device ONNX wake-word detection.
+- `SpeechRecognizer` is now command-only; it is no longer used to detect "Alfred".
+- Wake-word engine is stopped before TTS/command listening to prevent microphone contention and self-triggering.
+- Added an 18-second conversation timeout and continuous command session.
+- Production `alfred.onnx` is intentionally not bundled until a real Alfred classifier is available.
+
