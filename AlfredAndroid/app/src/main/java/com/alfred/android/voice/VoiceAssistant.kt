@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -17,7 +19,14 @@ class VoiceAssistant(
     private val onListeningChanged: (Boolean) -> Unit,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
+    private val onWakeWordDetected: () -> Unit = {},
 ) : TextToSpeech.OnInitListener {
+
+    private enum class ListeningMode {
+        IDLE,
+        WAKE_WORD,
+        COMMAND
+    }
 
     private var speechRecognizer: SpeechRecognizer? = null
 
@@ -27,9 +36,15 @@ class VoiceAssistant(
 
     private var isListening = false
 
-    private var continuousMode = false
+    private var listeningMode =
+        ListeningMode.IDLE
 
     private var destroyed = false
+
+    private val mainHandler =
+        Handler(
+            Looper.getMainLooper()
+        )
 
     init {
 
@@ -63,23 +78,19 @@ class VoiceAssistant(
         }
     }
 
-    fun startListening(
-        continuous: Boolean = false
-    ) {
-
-        continuousMode =
-            continuous
+    /**
+     * Starts wake-word mode.
+     *
+     * The recognizer continuously listens for
+     * "Alfred", "Hey Alfred", etc.
+     */
+    fun startWakeWordListening() {
 
         if (destroyed) {
             return
         }
 
-        if (
-            ContextCompat.checkSelfPermission(
-                context,
-                Manifest.permission.RECORD_AUDIO
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (!hasMicrophonePermission()) {
 
             onError(
                 "Microphone permission is not granted"
@@ -101,12 +112,75 @@ class VoiceAssistant(
             return
         }
 
+        listeningMode =
+            ListeningMode.WAKE_WORD
+
         startRecognition()
+    }
+
+    /**
+     * Starts normal command listening.
+     */
+    fun startCommandListening() {
+
+        if (destroyed) {
+            return
+        }
+
+        if (!hasMicrophonePermission()) {
+
+            onError(
+                "Microphone permission is not granted"
+            )
+
+            return
+        }
+
+        if (
+            !SpeechRecognizer.isRecognitionAvailable(
+                context
+            )
+        ) {
+
+            onError(
+                "Speech recognition is not available on this phone"
+            )
+
+            return
+        }
+
+        listeningMode =
+            ListeningMode.COMMAND
+
+        startRecognition()
+    }
+
+    /**
+     * Kept for compatibility with the existing service.
+     *
+     * continuous=true now means command listening
+     * that restarts after every recognition result.
+     */
+    fun startListening(
+        continuous: Boolean = false
+    ) {
+
+        if (continuous) {
+
+            startCommandListening()
+
+        } else {
+
+            startCommandListening()
+        }
     }
 
     private fun startRecognition() {
 
-        if (destroyed) {
+        if (
+            destroyed ||
+            listeningMode == ListeningMode.IDLE
+        ) {
             return
         }
 
@@ -163,27 +237,44 @@ class VoiceAssistant(
                         false
                     )
 
+                    if (destroyed) {
+                        return
+                    }
+
                     val message =
                         recognitionErrorMessage(
                             error
                         )
 
-                    if (
-                        continuousMode &&
-                        !destroyed &&
-                        error != SpeechRecognizer.ERROR_CLIENT
+                    when (
+                        listeningMode
                     ) {
 
-                        onError(
-                            message
-                        )
+                        ListeningMode.WAKE_WORD -> {
 
-                        restartRecognition()
-                    } else {
+                            /*
+                             * Wake mode should keep
+                             * listening after normal
+                             * recognition errors.
+                             */
+                            if (
+                                error !=
+                                SpeechRecognizer.ERROR_CLIENT
+                            ) {
 
-                        onError(
-                            message
-                        )
+                                restartRecognition()
+                            }
+                        }
+
+                        ListeningMode.COMMAND -> {
+
+                            onError(
+                                message
+                            )
+                        }
+
+                        ListeningMode.IDLE -> {
+                        }
                     }
                 }
 
@@ -206,38 +297,65 @@ class VoiceAssistant(
                         matches
                             ?.firstOrNull()
                             ?.trim()
+                            .orEmpty()
 
-                    if (
-                        text.isNullOrBlank()
+                    when (
+                        listeningMode
                     ) {
 
-                        if (
-                            continuousMode &&
-                            !destroyed
-                        ) {
+                        ListeningMode.WAKE_WORD -> {
 
-                            restartRecognition()
+                            if (
+                                containsWakeWord(
+                                    text
+                                )
+                            ) {
 
-                        } else {
+                                android.util.Log.i(
+                                    TAG,
+                                    "Wake word detected: $text"
+                                )
 
-                            onError(
-                                "I did not hear anything"
+                                /*
+                                 * Stop wake recognition
+                                 * before handing control
+                                 * to command mode.
+                                 */
+                                stopRecognizerOnly()
+
+                                onWakeWordDetected()
+
+                            } else {
+
+                                /*
+                                 * Nothing relevant.
+                                 * Continue waiting for
+                                 * Alfred.
+                                 */
+                                restartRecognition()
+                            }
+                        }
+
+                        ListeningMode.COMMAND -> {
+
+                            if (
+                                text.isBlank()
+                            ) {
+
+                                onError(
+                                    "I did not hear anything"
+                                )
+
+                                return
+                            }
+
+                            onResult(
+                                text
                             )
                         }
 
-                        return
-                    }
-
-                    onResult(
-                        text
-                    )
-
-                    if (
-                        continuousMode &&
-                        !destroyed
-                    ) {
-
-                        restartRecognition()
+                        ListeningMode.IDLE -> {
+                        }
                     }
                 }
 
@@ -274,6 +392,9 @@ class VoiceAssistant(
                     Locale.getDefault()
                 )
 
+                /*
+                 * We only need the final result.
+                 */
                 putExtra(
                     RecognizerIntent.EXTRA_PARTIAL_RESULTS,
                     false
@@ -285,58 +406,117 @@ class VoiceAssistant(
                 )
             }
 
-        speechRecognizer?.startListening(
-            intent
-        )
+        try {
+
+            speechRecognizer?.startListening(
+                intent
+            )
+
+        } catch (
+            error: Exception
+        ) {
+
+            android.util.Log.e(
+                TAG,
+                "Failed to start SpeechRecognizer",
+                error
+            )
+
+            isListening = false
+
+            onListeningChanged(
+                false
+            )
+
+            onError(
+                error.message
+                    ?: "Could not start voice recognition"
+            )
+        }
+    }
+
+    private fun containsWakeWord(
+        text: String
+    ): Boolean {
+
+        if (text.isBlank()) {
+            return false
+        }
+
+        val normalized =
+            text
+                .lowercase(Locale.US)
+                .replace(
+                    Regex("[^a-z0-9 ]"),
+                    " "
+                )
+                .replace(
+                    Regex("\\s+"),
+                    " "
+                )
+                .trim()
+
+        if (normalized.isBlank()) {
+            return false
+        }
+
+        val words =
+            normalized.split(" ")
+
+        /*
+         * Accept:
+         *
+         * Alfred
+         * hey Alfred
+         * hello Alfred
+         * okay Alfred
+         * hi Alfred
+         *
+         * Also tolerates common STT variations.
+         */
+        val wakeWords =
+            setOf(
+                "alfred",
+                "alford",
+                "alfred",
+                "alfred"
+            )
+
+        return words.any { word ->
+            word in wakeWords
+        }
     }
 
     private fun restartRecognition() {
 
         if (
             destroyed ||
-            !continuousMode
+            listeningMode == ListeningMode.IDLE
         ) {
             return
         }
 
-        Thread {
-            try {
+        mainHandler.postDelayed(
+            {
 
-                Thread.sleep(
-                    500
-                )
+                if (
+                    !destroyed &&
+                    listeningMode !=
+                    ListeningMode.IDLE
+                ) {
 
-            } catch (
-                ignored: InterruptedException
-            ) {
-            }
-
-            if (
-                !destroyed &&
-                continuousMode
-            ) {
-
-                android.os.Handler(
-                    android.os.Looper.getMainLooper()
-                ).post {
-
-                    if (
-                        !destroyed &&
-                        continuousMode
-                    ) {
-
-                        startRecognition()
-                    }
+                    startRecognition()
                 }
-            }
 
-        }.start()
+            },
+            500L
+        )
     }
 
     fun stopListening() {
 
-        continuousMode =
-            false
+        listeningMode =
+            ListeningMode.IDLE
 
         stopRecognizerOnly()
 
@@ -427,6 +607,14 @@ class VoiceAssistant(
             .trim()
     }
 
+    private fun hasMicrophonePermission(): Boolean {
+
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
     private fun recognitionErrorMessage(
         error: Int
     ): String {
@@ -469,7 +657,12 @@ class VoiceAssistant(
 
         destroyed = true
 
-        continuousMode = false
+        listeningMode =
+            ListeningMode.IDLE
+
+        mainHandler.removeCallbacksAndMessages(
+            null
+        )
 
         stopRecognizerOnly()
 
@@ -482,5 +675,11 @@ class VoiceAssistant(
         ttsReady = false
 
         isListening = false
+    }
+
+    companion object {
+
+        private const val TAG =
+            "ALFRED-Voice"
     }
 }

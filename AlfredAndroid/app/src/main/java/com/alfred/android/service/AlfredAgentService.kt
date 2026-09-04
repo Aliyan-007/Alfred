@@ -80,7 +80,8 @@ class AlfredAgentService : Service() {
 
         ensureNotificationChannel()
 
-        _serviceRunning.value = true
+        _serviceRunning.value =
+            true
 
         _serviceStatus.value =
             "Starting ALFRED..."
@@ -116,7 +117,7 @@ class AlfredAgentService : Service() {
 
                 android.util.Log.i(
                     TAG,
-                    "Starting voice mode"
+                    "Starting wake-word voice mode"
                 )
 
                 promoteToForeground(
@@ -130,7 +131,7 @@ class AlfredAgentService : Service() {
                     startAgent()
                 }
 
-                startVoiceListening()
+                startWakeWordListening()
             }
 
             ACTION_STOP_VOICE -> {
@@ -174,7 +175,7 @@ class AlfredAgentService : Service() {
 
         val notificationText =
             if (microphone) {
-                "Voice assistant active"
+                "Waiting for wake word: Alfred"
             } else {
                 _serviceStatus.value
             }
@@ -315,12 +316,19 @@ class AlfredAgentService : Service() {
                         _voiceListening.value =
                             listening
 
-                        _voiceStatus.value =
-                            if (listening) {
+                        if (listening) {
+
+                            _voiceStatus.value =
                                 "Listening..."
-                            } else {
+
+                        } else if (
+                            _voiceStatus.value ==
+                            "Listening..."
+                        ) {
+
+                            _voiceStatus.value =
                                 "Ready"
-                            }
+                        }
 
                         updateVoiceNotification()
                     },
@@ -359,12 +367,65 @@ class AlfredAgentService : Service() {
                             error
 
                         updateVoiceNotification()
+
+                        /*
+                         * If we're in wake mode, the
+                         * VoiceAssistant itself will
+                         * continue listening after
+                         * normal recognition errors.
+                         */
+                    },
+
+                    onWakeWordDetected = {
+
+                        android.util.Log.i(
+                            TAG,
+                            "WAKE WORD DETECTED"
+                        )
+
+                        _voiceStatus.value =
+                            "Wake word detected"
+
+                        updateVoiceNotification()
+
+                        mainHandler.post {
+
+                            /*
+                             * Switch from wake mode
+                             * to command mode.
+                             */
+                            voiceAssistant
+                                ?.speak(
+                                    "Yes Sir."
+                                )
+
+                            mainHandler.postDelayed(
+                                {
+
+                                    if (
+                                        voiceAssistant !=
+                                        null
+                                    ) {
+
+                                        _voiceStatus.value =
+                                            "Listening for command..."
+
+                                        updateVoiceNotification()
+
+                                        voiceAssistant
+                                            ?.startCommandListening()
+                                    }
+
+                                },
+                                700L
+                            )
+                        }
                     }
                 )
         }
     }
 
-    private fun startVoiceListening() {
+    private fun startWakeWordListening() {
 
         if (!hasMicrophonePermission()) {
 
@@ -384,7 +445,7 @@ class AlfredAgentService : Service() {
         createVoiceAssistant()
 
         _voiceStatus.value =
-            "Starting microphone..."
+            "Waiting for Alfred..."
 
         updateVoiceNotification()
 
@@ -392,12 +453,11 @@ class AlfredAgentService : Service() {
 
             android.util.Log.i(
                 TAG,
-                "Calling VoiceAssistant.startListening()"
+                "Starting wake-word recognition"
             )
 
-            voiceAssistant?.startListening(
-                continuous = false
-            )
+            voiceAssistant
+                ?.startWakeWordListening()
         }
     }
 
@@ -455,6 +515,36 @@ class AlfredAgentService : Service() {
                     voiceAssistant?.speak(
                         response
                     )
+
+                    /*
+                     * Give TTS a little time to begin,
+                     * then return to wake-word mode.
+                     */
+                    mainHandler.postDelayed(
+                        {
+
+                            if (
+                                voiceAssistant != null &&
+                                voiceModeActive
+                            ) {
+
+                                android.util.Log.i(
+                                    TAG,
+                                    "Returning to wake-word mode"
+                                )
+
+                                _voiceStatus.value =
+                                    "Waiting for Alfred..."
+
+                                updateVoiceNotification()
+
+                                voiceAssistant
+                                    ?.startWakeWordListening()
+                            }
+
+                        },
+                        1200L
+                    )
                 }
 
             } catch (
@@ -479,6 +569,27 @@ class AlfredAgentService : Service() {
 
                     voiceAssistant?.speak(
                         "Sorry Sir, command execute nahi ho saki."
+                    )
+
+                    mainHandler.postDelayed(
+                        {
+
+                            if (
+                                voiceAssistant != null &&
+                                voiceModeActive
+                            ) {
+
+                                _voiceStatus.value =
+                                    "Waiting for Alfred..."
+
+                                updateVoiceNotification()
+
+                                voiceAssistant
+                                    ?.startWakeWordListening()
+                            }
+
+                        },
+                        1500L
                     )
                 }
             }
@@ -687,14 +798,14 @@ class AlfredAgentService : Service() {
             when {
 
                 _voiceListening.value ->
-                    "Listening for command..."
+                    "Listening..."
 
                 _voiceStatus.value != "Ready" &&
                     _voiceStatus.value != "Stopped" ->
                     _voiceStatus.value
 
                 else ->
-                    _serviceStatus.value
+                    "Waiting for Alfred..."
             }
 
         updateNotification(
