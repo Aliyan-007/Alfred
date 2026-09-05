@@ -12,3 +12,7 @@ models/piper/*.onnx
 models/piper/*.onnx.json
 
 AlfredWakeWord/
+
+AlfredAndroid.zip
+Alfred_Smart_Command_Phase.zip
+models/piper/*.onnx
