@@ -110,3 +110,4 @@ next session knows what's already been done and doesn't redo it.)_
 - 2026-09-06: Fixed pre-existing AlfredAgentService compile errors by restoring the missing android.util.Log import; full build now reaches a separate release R8 missing-class error for com.google.errorprone.annotations.Immutable.
 - 2026-09-06: Added the requested Tink/R8 -dontwarn rule; assembleRelease passes, but the aggregate build remains blocked by the existing camera-permission lint error in AndroidManifest.xml.
 - 2026-09-06: Fixed camera-permission lint by declaring android.hardware.camera as optional; full build and assembleRelease both pass.
+- 2026-09-06: Redesigned DashboardScreen as a futuristic command center with a connection hero, telemetry strip, live voice channel, identity panel, capability/access matrices, and command dock; focused Kotlin compile passes.
