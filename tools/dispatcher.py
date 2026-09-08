@@ -19,7 +19,23 @@ from tools.media import (
     pc_volume_mute,
     pc_volume_unmute,
 )
-
+from tools.system import (
+    open_application,
+    close_application,
+    minimize_application,
+    maximize_application,
+    activate_application,
+    lock_pc,
+    shutdown_pc,
+    restart_pc,
+    sleep_pc,
+    sign_out,
+    cancel_shutdown,
+    get_system_information,
+    get_cpu_information,
+    get_memory_information,
+    get_storage_information,
+)
 
 # =========================================================
 # APPLICATION ALIASES
@@ -479,7 +495,240 @@ def handle_application_command(
         app
     )
 
+# =========================================================
+# WINDOWS SYSTEM COMMANDS
+# =========================================================
 
+def handle_system_command(
+    text: str,
+):
+
+    normalized = normalize_text(
+        text
+    )
+
+    # -----------------------------------------------------
+    # LOCK
+    # -----------------------------------------------------
+
+    if normalized in {
+        "lock pc",
+        "lock the pc",
+        "lock computer",
+        "lock the computer",
+        "lock my pc",
+        "lock my computer",
+    }:
+
+        return lock_pc()
+
+    # -----------------------------------------------------
+    # SHUTDOWN
+    # -----------------------------------------------------
+
+    if normalized in {
+        "shutdown",
+        "shut down",
+        "shutdown pc",
+        "shut down pc",
+        "shutdown computer",
+        "shut down computer",
+        "turn off pc",
+        "turn off computer",
+    }:
+
+        return shutdown_pc()
+
+    # -----------------------------------------------------
+    # RESTART
+    # -----------------------------------------------------
+
+    if normalized in {
+        "restart",
+        "restart pc",
+        "restart computer",
+        "reboot",
+        "reboot pc",
+        "reboot computer",
+    }:
+
+        return restart_pc()
+
+    # -----------------------------------------------------
+    # SLEEP
+    # -----------------------------------------------------
+
+    if normalized in {
+        "sleep",
+        "sleep pc",
+        "sleep computer",
+        "put pc to sleep",
+        "put computer to sleep",
+    }:
+
+        return sleep_pc()
+
+    # -----------------------------------------------------
+    # SIGN OUT
+    # -----------------------------------------------------
+
+    if normalized in {
+        "sign out",
+        "sign me out",
+        "log out",
+        "log me out",
+    }:
+
+        return sign_out()
+
+    # -----------------------------------------------------
+    # CANCEL SHUTDOWN
+    # -----------------------------------------------------
+
+    if normalized in {
+        "cancel shutdown",
+        "cancel the shutdown",
+        "abort shutdown",
+    }:
+
+        return cancel_shutdown()
+
+    # -----------------------------------------------------
+    # SYSTEM INFORMATION
+    # -----------------------------------------------------
+
+    if normalized in {
+        "system information",
+        "system info",
+        "pc information",
+        "pc info",
+        "computer information",
+        "computer info",
+        "what are my pc specs",
+        "show pc specs",
+    }:
+
+        return get_system_information()
+
+    # -----------------------------------------------------
+    # CPU
+    # -----------------------------------------------------
+
+    if normalized in {
+        "cpu usage",
+        "cpu status",
+        "processor usage",
+        "how much cpu am i using",
+    }:
+
+        return get_cpu_information()
+
+    # -----------------------------------------------------
+    # RAM
+    # -----------------------------------------------------
+
+    if normalized in {
+        "ram usage",
+        "ram status",
+        "memory usage",
+        "memory status",
+        "how much ram am i using",
+    }:
+
+        return get_memory_information()
+
+    # -----------------------------------------------------
+    # STORAGE
+    # -----------------------------------------------------
+
+    if normalized in {
+        "storage",
+        "storage usage",
+        "disk usage",
+        "disk space",
+        "how much storage do i have",
+        "how much storage is left",
+    }:
+
+        return get_storage_information()
+
+    # -----------------------------------------------------
+    # CLOSE APPLICATION
+    # -----------------------------------------------------
+
+    match = re.match(
+        r"^(?:close|quit|exit)\s+(.+)$",
+        normalized,
+    )
+
+    if match:
+
+        application = match.group(
+            1
+        ).strip()
+
+        return close_application(
+            application
+        )
+
+    # -----------------------------------------------------
+    # MINIMIZE APPLICATION
+    # -----------------------------------------------------
+
+    match = re.match(
+        r"^(?:minimize|minimise)\s+(.+)$",
+        normalized,
+    )
+
+    if match:
+
+        application = match.group(
+            1
+        ).strip()
+
+        return minimize_application(
+            application
+        )
+
+    # -----------------------------------------------------
+    # MAXIMIZE APPLICATION
+    # -----------------------------------------------------
+
+    match = re.match(
+        r"^(?:maximize|maximise)\s+(.+)$",
+        normalized,
+    )
+
+    if match:
+
+        application = match.group(
+            1
+        ).strip()
+
+        return maximize_application(
+            application
+        )
+
+    # -----------------------------------------------------
+    # SWITCH APPLICATION
+    # -----------------------------------------------------
+
+    match = re.match(
+        r"^(?:switch to|go to|bring up)\s+(.+)$",
+        normalized,
+    )
+
+    if match:
+
+        application = match.group(
+            1
+        ).strip()
+
+        return activate_application(
+            application
+        )
+
+    return None
 # =========================================================
 # MAIN DISPATCHER
 # =========================================================
@@ -498,6 +747,17 @@ def handle_command(
         return None
 
     text = user_input.strip()
+
+    # =====================================================
+    # WINDOWS SYSTEM
+    # =====================================================
+
+    result = handle_system_command(
+        text
+    )
+
+    if result is not None:
+        return result
 
     # =====================================================
     # PC VOLUME
@@ -568,7 +828,18 @@ def handle_command(
     # =====================================================
     # NO EXACT COMMAND
     # =====================================================
+    
+    # =====================================================
+    # FILE COMMAND
+    # =====================================================
 
+    result = handle_file_command(
+        text
+    )
+
+    if result is not None:
+        return result
+    
     return None
 
 def handle_file_command(
@@ -605,5 +876,7 @@ def handle_file_command(
             return find_and_open_file(
                 query
             )
+
+        
 
     return None
