@@ -1,755 +1,325 @@
+import ctypes
+from ctypes import wintypes
 import os
+import platform
+import re
+import socket
 import subprocess
 import time
+from datetime import datetime
 from pathlib import Path
 
+from tools.app_indexer import indexer
 
-# =========================================================
-# APPLICATIONS
-# =========================================================
-
-APPLICATIONS = {
-    "notepad": ["notepad.exe"],
-    "calculator": ["calc.exe"],
-    "calc": ["calc.exe"],
-
-    "file explorer": ["explorer.exe"],
-    "explorer": ["explorer.exe"],
-
-    "chrome": [
-        "cmd",
-        "/c",
-        "start",
-        "",
-        "chrome",
-    ],
-
-    "brave": [
-        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
-    ],
-
-    "edge": [
-        "cmd",
-        "/c",
-        "start",
-        "",
-        "msedge",
-    ],
-
-    "vscode": ["code"],
-    "vs code": ["code"],
-
-    "visual studio code": ["code"],
-
-    "task manager": [
-        "taskmgr.exe"
-    ],
-
-    "control panel": [
-        "control.exe"
-    ],
-
-    "settings": [
-        "cmd",
-        "/c",
-        "start",
-        "",
-        "ms-settings:"
-    ],
-
-    "command prompt": [
-        "cmd.exe"
-    ],
-
-    "cmd": [
-        "cmd.exe"
-    ],
-
-    "powershell": [
-        "powershell.exe"
-    ],
-
-    "terminal": [
-        "wt.exe"
-    ],
-}
+# Win32 Constants for Clipboard
+CF_UNICODETEXT = 13
+GHND = 0x0042
 
 
 # =========================================================
-# NORMALIZE
-# =========================================================
-
-def normalize_text(text: str) -> str:
-    return (
-        text
-        .lower()
-        .strip()
-    )
-
-
-# =========================================================
-# OPEN APPLICATION
+# APPLICATION CONTROL (DYNAMIC)
 # =========================================================
 
 def open_application(application: str) -> str:
-
-    application = normalize_text(
-        application
-    )
-
-    command = APPLICATIONS.get(
-        application
-    )
-
-    if command is None:
-        return (
-            f"I don't have permission to open "
-            f"'{application}', Sir."
-        )
-
-    try:
-
-        subprocess.Popen(
-            command,
-            shell=False,
-        )
-
-        return (
-            f"Opened {application}, Sir."
-        )
-
-    except Exception as error:
-
-        return (
-            f"I couldn't open {application}, Sir. "
-            f"{error}"
-        )
+    return indexer.launch(application)
 
 
 # =========================================================
-# FIND WINDOW
+# WINDOW MANAGEMENT (WIN32)
 # =========================================================
 
 def _get_windows():
-
     try:
-
-        import ctypes
-        from ctypes import wintypes
-
         user32 = ctypes.windll.user32
-
         windows = []
 
         EnumWindowsProc = ctypes.WINFUNCTYPE(
-            ctypes.c_bool,
-            wintypes.HWND,
-            wintypes.LPARAM,
+            ctypes.c_bool, wintypes.HWND, wintypes.LPARAM
         )
 
         def callback(hwnd, _):
-
             if not user32.IsWindowVisible(hwnd):
                 return True
-
-            length = user32.GetWindowTextLengthW(
-                hwnd
-            )
-
+            length = user32.GetWindowTextLengthW(hwnd)
             if length <= 0:
                 return True
-
-            buffer = ctypes.create_unicode_buffer(
-                length + 1
-            )
-
-            user32.GetWindowTextW(
-                hwnd,
-                buffer,
-                length + 1,
-            )
-
+            buffer = ctypes.create_unicode_buffer(length + 1)
+            user32.GetWindowTextW(hwnd, buffer, length + 1)
             title = buffer.value.strip()
-
             if title:
-                windows.append(
-                    (hwnd, title)
-                )
-
+                windows.append((hwnd, title))
             return True
 
-        user32.EnumWindows(
-            EnumWindowsProc(callback),
-            0,
-        )
-
+        user32.EnumWindows(EnumWindowsProc(callback), 0)
         return windows
-
     except Exception:
         return []
 
 
-# =========================================================
-# FIND WINDOW BY NAME
-# =========================================================
-
-def find_window(
-    application: str,
-):
-
-    wanted = normalize_text(
-        application
-    )
-
+def find_window(application: str):
+    wanted = application.lower().strip()
     for hwnd, title in _get_windows():
-
-        if wanted in normalize_text(title):
+        if wanted in title.lower():
             return hwnd
-
     return None
 
 
-# =========================================================
-# ACTIVATE APPLICATION
-# =========================================================
-
-def activate_application(
-    application: str,
-) -> str:
-
-    hwnd = find_window(
-        application
-    )
-
+def activate_application(application: str) -> str:
+    hwnd = find_window(application)
     if hwnd is None:
-        return (
-            f"I couldn't find an open window for "
-            f"{application}, Sir."
-        )
-
+        return f"I couldn't find an active window for '{application}', Sir."
     try:
-
-        import ctypes
-
-        ctypes.windll.user32.ShowWindow(
-            hwnd,
-            9,  # SW_RESTORE
-        )
-
-        ctypes.windll.user32.SetForegroundWindow(
-            hwnd
-        )
-
-        return (
-            f"Switched to {application}, Sir."
-        )
-
+        ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        return f"Switched to {application}, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't switch to {application}, Sir. "
-            f"{error}"
-        )
+        return f"I couldn't switch to {application}: {error}"
 
 
-# =========================================================
-# CLOSE APPLICATION
-# =========================================================
-
-def close_application(
-    application: str,
-) -> str:
-
-    hwnd = find_window(
-        application
-    )
-
+def close_application(application: str) -> str:
+    hwnd = find_window(application)
     if hwnd is None:
-        return (
-            f"I couldn't find an open window for "
-            f"{application}, Sir."
-        )
-
+        return f"I couldn't find an open window for '{application}', Sir."
     try:
-
-        import ctypes
-
         WM_CLOSE = 0x0010
-
-        ctypes.windll.user32.PostMessageW(
-            hwnd,
-            WM_CLOSE,
-            0,
-            0,
-        )
-
-        return (
-            f"Closed {application}, Sir."
-        )
-
+        ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+        return f"Closed {application}, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't close {application}, Sir. "
-            f"{error}"
-        )
+        return f"I couldn't close {application}: {error}"
 
 
-# =========================================================
-# MINIMIZE APPLICATION
-# =========================================================
-
-def minimize_application(
-    application: str,
-) -> str:
-
-    hwnd = find_window(
-        application
-    )
-
+def minimize_application(application: str) -> str:
+    hwnd = find_window(application)
     if hwnd is None:
-        return (
-            f"I couldn't find {application}, Sir."
-        )
-
+        return f"I couldn't find '{application}', Sir."
     try:
-
-        import ctypes
-
-        ctypes.windll.user32.ShowWindow(
-            hwnd,
-            6,  # SW_MINIMIZE
-        )
-
-        return (
-            f"Minimized {application}, Sir."
-        )
-
+        ctypes.windll.user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE
+        return f"Minimized {application}, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't minimize {application}, Sir. "
-            f"{error}"
-        )
+        return f"I couldn't minimize {application}: {error}"
 
 
-# =========================================================
-# MAXIMIZE APPLICATION
-# =========================================================
-
-def maximize_application(
-    application: str,
-) -> str:
-
-    hwnd = find_window(
-        application
-    )
-
+def maximize_application(application: str) -> str:
+    hwnd = find_window(application)
     if hwnd is None:
-        return (
-            f"I couldn't find {application}, Sir."
-        )
-
+        return f"I couldn't find '{application}', Sir."
     try:
-
-        import ctypes
-
-        ctypes.windll.user32.ShowWindow(
-            hwnd,
-            3,  # SW_MAXIMIZE
-        )
-
-        ctypes.windll.user32.SetForegroundWindow(
-            hwnd
-        )
-
-        return (
-            f"Maximized {application}, Sir."
-        )
-
+        ctypes.windll.user32.ShowWindow(hwnd, 3)  # SW_MAXIMIZE
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+        return f"Maximized {application}, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't maximize {application}, Sir. "
-            f"{error}"
-        )
+        return f"I couldn't maximize {application}: {error}"
 
 
 # =========================================================
-# LOCK PC
+# SYSTEM POWER CONTROL
 # =========================================================
 
 def lock_pc():
-
     try:
-
-        import ctypes
-
         ctypes.windll.user32.LockWorkStation()
-
-        return (
-            "The PC is locked, Sir."
-        )
-
+        return "The PC is locked, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't lock the PC, Sir. "
-            f"{error}"
-        )
+        return f"I couldn't lock the PC: {error}"
 
 
-# =========================================================
-# SHUTDOWN
-# =========================================================
-
-def shutdown_pc(
-    delay_seconds: int = 0,
-):
-
+def shutdown_pc(delay_seconds: int = 0):
     try:
-
-        subprocess.Popen(
-            [
-                "shutdown",
-                "/s",
-                "/t",
-                str(delay_seconds),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        return (
-            "The PC is shutting down, Sir."
-        )
-
+        subprocess.Popen(["shutdown", "/s", "/t", str(delay_seconds)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return "The PC is shutting down, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't shut down the PC, Sir. "
-            f"{error}"
-        )
+        return f"Failed to shut down the PC: {error}"
 
 
-# =========================================================
-# RESTART
-# =========================================================
-
-def restart_pc(
-    delay_seconds: int = 0,
-):
-
+def restart_pc(delay_seconds: int = 0):
     try:
-
-        subprocess.Popen(
-            [
-                "shutdown",
-                "/r",
-                "/t",
-                str(delay_seconds),
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        return (
-            "The PC is restarting, Sir."
-        )
-
+        subprocess.Popen(["shutdown", "/r", "/t", str(delay_seconds)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return "The PC is restarting, Sir."
     except Exception as error:
+        return f"Failed to restart the PC: {error}"
 
-        return (
-            f"I couldn't restart the PC, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# SLEEP
-# =========================================================
 
 def sleep_pc():
-
     try:
-
-        subprocess.Popen(
-            [
-                "rundll32.exe",
-                "powrprof.dll,SetSuspendState",
-                "0",
-                "1",
-                "0",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        return (
-            "Putting the PC to sleep, Sir."
-        )
-
+        subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0", "1", "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return "Putting the PC to sleep, Sir."
     except Exception as error:
+        return f"Failed to put the PC to sleep: {error}"
 
-        return (
-            f"I couldn't put the PC to sleep, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# SIGN OUT
-# =========================================================
 
 def sign_out():
-
     try:
-
-        subprocess.Popen(
-            [
-                "shutdown",
-                "/l",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        return (
-            "Signing you out, Sir."
-        )
-
+        subprocess.Popen(["shutdown", "/l"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return "Signing you out, Sir."
     except Exception as error:
+        return f"Failed to sign out: {error}"
 
-        return (
-            f"I couldn't sign you out, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# CANCEL SHUTDOWN
-# =========================================================
 
 def cancel_shutdown():
-
     try:
-
-        subprocess.Popen(
-            [
-                "shutdown",
-                "/a",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-
-        return (
-            "The scheduled shutdown has been cancelled, Sir."
-        )
-
+        subprocess.Popen(["shutdown", "/a"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return "Scheduled shutdown has been cancelled, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't cancel the shutdown, Sir. "
-            f"{error}"
-        )
+        return f"Failed to cancel shutdown: {error}"
 
 
 # =========================================================
-# SYSTEM INFORMATION
+# SCREENSHOT ENGINE
+# =========================================================
+
+def take_screenshot() -> str:
+    try:
+        from PIL import ImageGrab
+
+        shots_dir = Path.home() / "Pictures" / "Screenshots"
+        shots_dir.mkdir(parents=True, exist_ok=True)
+
+        filename = f"Screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+        file_path = shots_dir / filename
+
+        img = ImageGrab.grab()
+        img.save(file_path, "PNG")
+
+        return f"Screenshot saved to your Screenshots folder, Sir."
+    except ImportError:
+        return "Pillow is not installed. Please install it using 'pip install pillow', Sir."
+    except Exception as error:
+        return f"I couldn't capture the screen: {error}"
+
+
+# =========================================================
+# PURE WIN32 CLIPBOARD
+# =========================================================
+
+def get_clipboard_text() -> str:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    if not user32.OpenClipboard(None):
+        return "I couldn't access the clipboard, Sir."
+    try:
+        handle = user32.GetClipboardData(CF_UNICODETEXT)
+        if not handle:
+            return "The clipboard is currently empty, Sir."
+        kernel32.GlobalLock.restype = ctypes.c_wchar_p
+        text = kernel32.GlobalLock(handle)
+        kernel32.GlobalUnlock(handle)
+        if not text:
+            return "The clipboard is empty, Sir."
+        return f"Your clipboard contains: {text}"
+    except Exception as error:
+        return f"Failed to read clipboard: {error}"
+    finally:
+        user32.CloseClipboard()
+
+
+def set_clipboard_text(text: str) -> str:
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
+
+    if not user32.OpenClipboard(None):
+        return "I couldn't access the clipboard, Sir."
+    try:
+        user32.EmptyClipboard()
+        encoded = text.encode("utf-16le") + b"\x00\x00"
+        kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
+        handle = kernel32.GlobalAlloc(GHND, len(encoded))
+        ptr = kernel32.GlobalLock(handle)
+        ctypes.memmove(ptr, encoded, len(encoded))
+        kernel32.GlobalUnlock(handle)
+        user32.SetClipboardData(CF_UNICODETEXT, handle)
+        return f"Copied to clipboard, Sir."
+    except Exception as error:
+        return f"Failed to copy to clipboard: {error}"
+    finally:
+        user32.CloseClipboard()
+
+
+def clear_clipboard() -> str:
+    user32 = ctypes.windll.user32
+    if not user32.OpenClipboard(None):
+        return "I couldn't access the clipboard, Sir."
+    try:
+        user32.EmptyClipboard()
+        return "Clipboard cleared, Sir."
+    finally:
+        user32.CloseClipboard()
+
+
+# =========================================================
+# TELEMETRY & HARDWARE INFO
 # =========================================================
 
 def get_system_information():
-
     try:
-
-        import platform
-
         return (
-            f"Operating system: {platform.system()} "
-            f"{platform.release()}. "
-            f"Computer: {platform.node()}. "
+            f"Operating system: {platform.system()} {platform.release()}. "
+            f"Computer name: {platform.node()}. "
             f"Processor: {platform.processor()}."
         )
-
     except Exception as error:
+        return f"Couldn't read system information: {error}"
 
-        return (
-            f"I couldn't read the system information, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# RAM INFORMATION
-# =========================================================
 
 def get_memory_information():
-
     try:
-
         import psutil
-
         memory = psutil.virtual_memory()
-
-        used_gb = memory.used / (
-            1024 ** 3
-        )
-
-        total_gb = memory.total / (
-            1024 ** 3
-        )
-
-        percent = memory.percent
-
-        return (
-            f"RAM usage is {percent:.0f} percent. "
-            f"{used_gb:.1f} GB of "
-            f"{total_gb:.1f} GB is currently in use, Sir."
-        )
-
-    except ImportError:
-
-        return (
-            "The psutil package is required for RAM "
-            "information, Sir."
-        )
-
+        used_gb = memory.used / (1024 ** 3)
+        total_gb = memory.total / (1024 ** 3)
+        return f"RAM usage is {memory.percent:.0f} percent. {used_gb:.1f} GB of {total_gb:.1f} GB is in use, Sir."
     except Exception as error:
+        return f"Couldn't read RAM usage: {error}"
 
-        return (
-            f"I couldn't read RAM usage, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# CPU INFORMATION
-# =========================================================
 
 def get_cpu_information():
-
     try:
-
         import psutil
-
-        usage = psutil.cpu_percent(
-            interval=0.5
-        )
-
-        cores = psutil.cpu_count(
-            logical=True
-        )
-
-        return (
-            f"CPU usage is {usage:.0f} percent "
-            f"across {cores} logical processors, Sir."
-        )
-
-    except ImportError:
-
-        return (
-            "The psutil package is required for CPU "
-            "information, Sir."
-        )
-
+        usage = psutil.cpu_percent(interval=0.5)
+        cores = psutil.cpu_count(logical=True)
+        return f"CPU usage is currently {usage:.0f} percent across {cores} logical processors, Sir."
     except Exception as error:
+        return f"Couldn't read CPU usage: {error}"
 
-        return (
-            f"I couldn't read CPU usage, Sir. "
-            f"{error}"
-        )
-
-
-# =========================================================
-# STORAGE INFORMATION
-# =========================================================
 
 def get_storage_information():
-
     try:
-
         import psutil
-
-        total = 0
-        used = 0
-
+        total, used = 0, 0
         for partition in psutil.disk_partitions():
-
             try:
-
-                usage = psutil.disk_usage(
-                    partition.mountpoint
-                )
-
+                usage = psutil.disk_usage(partition.mountpoint)
                 total += usage.total
                 used += usage.used
-
             except Exception:
                 continue
-
         if total == 0:
-            return (
-                "I couldn't read the storage information, Sir."
-            )
+            return "No accessible storage drives detected, Sir."
 
-        total_gb = total / (
-            1024 ** 3
-        )
-
-        used_gb = used / (
-            1024 ** 3
-        )
-
-        percent = (
-            used / total
-        ) * 100
-
-        return (
-            f"Storage usage is {percent:.0f} percent. "
-            f"{used_gb:.1f} GB of {total_gb:.1f} GB "
-            f"is currently used, Sir."
-        )
-
-    except ImportError:
-
-        return (
-            "The psutil package is required for "
-            "storage information, Sir."
-        )
-
+        total_gb = total / (1024 ** 3)
+        used_gb = used / (1024 ** 3)
+        percent = (used / total) * 100
+        return f"Storage is at {percent:.0f} percent capacity. {used_gb:.1f} GB used out of {total_gb:.1f} GB, Sir."
     except Exception as error:
-
-        return (
-            f"I couldn't read storage information, Sir. "
-            f"{error}"
-        )
+        return f"Couldn't read storage info: {error}"
 
 
-# =========================================================
-# TEST
-# =========================================================
+def get_battery_information():
+    try:
+        import psutil
+        battery = psutil.sensors_battery()
+        if battery is None:
+            return "This PC is connected directly to AC power and has no battery installed, Sir."
+        status = "plugged in" if battery.power_plugged else "on battery power"
+        return f"Battery is at {battery.percent:.0f} percent and is currently {status}, Sir."
+    except Exception as error:
+        return f"Couldn't read battery status: {error}"
 
-if __name__ == "__main__":
 
-    print(
-        open_application("notepad")
-    )
-
-    time.sleep(1)
-
-    print(
-        get_system_information()
-    )
-
-    print(
-        get_cpu_information()
-    )
-
-    print(
-        get_memory_information()
-    )
-
-    print(
-        get_storage_information()
-    )
+def get_network_information():
+    try:
+        hostname = socket.gethostname()
+        local_ip = socket.gethostbyname(hostname)
+        return f"Computer name is {hostname}, and your local IP address is {local_ip}, Sir."
+    except Exception as error:
+        return f"Couldn't read network information: {error}"

@@ -1,15 +1,14 @@
 import ctypes
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
-
 # =========================================================
-# CONFIGURATION
+# CONFIGURATION & KNOWN PATHS
 # =========================================================
 
-# Directories we do NOT want to scan.
 EXCLUDED_DIR_NAMES = {
     "$recycle.bin",
     "system volume information",
@@ -24,356 +23,205 @@ EXCLUDED_DIR_NAMES = {
     "__pycache__",
 }
 
-# Maximum number of results to return internally.
-MAX_RESULTS = 15
+USER_HOME = Path.home()
 
-# Avoid scanning endlessly large directory trees.
-MAX_FILES_SCANNED = 500_000
+STANDARD_DIRS = {
+    "desktop": USER_HOME / "Desktop",
+    "downloads": USER_HOME / "Downloads",
+    "documents": USER_HOME / "Documents",
+    "pictures": USER_HOME / "Pictures",
+    "videos": USER_HOME / "Videos",
+    "music": USER_HOME / "Music",
+}
+
+MAX_RESULTS = 10
+MAX_FILES_SCANNED = 300_000
 
 
 # =========================================================
-# WINDOWS DRIVE DISCOVERY
+# DRIVE DISCOVERY
 # =========================================================
 
 def get_fixed_drives():
-    """
-    Return available fixed drives such as:
-        C:\\
-        D:\\
-    """
-
     drives = []
-
     bitmask = ctypes.windll.kernel32.GetLogicalDrives()
-
     for i in range(26):
-
-        if not (bitmask & (1 << i)):
-            continue
-
-        drive = f"{chr(65 + i)}:\\"
-
-        drive_type = ctypes.windll.kernel32.GetDriveTypeW(
-            drive
-        )
-
-        # DRIVE_FIXED = 3
-        if drive_type == 3:
-            drives.append(
-                drive
-            )
-
+        if bitmask & (1 << i):
+            drive = f"{chr(65 + i)}:\\"
+            if ctypes.windll.kernel32.GetDriveTypeW(drive) == 3:  # DRIVE_FIXED
+                drives.append(drive)
     return drives
 
 
 # =========================================================
-# NORMALIZATION
+# UTILITIES
 # =========================================================
 
-def normalize(
-    text: str,
-) -> str:
-    return re.sub(
-        r"\s+",
-        " ",
-        text.lower().strip(),
-    )
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().strip())
 
 
-# =========================================================
-# NAME MATCHING
-# =========================================================
-
-def score_file(
-    path: Path,
-    query: str,
-):
-    """
-    Score a file against the user's query.
-
-    Higher = better match.
-    """
-
-    query = normalize(
-        query
-    )
-
-    name = normalize(
-        path.name
-    )
-
-    stem = normalize(
-        path.stem
-    )
-
+def score_file(path: Path, query: str) -> int:
+    query = normalize(query)
+    name = normalize(path.name)
+    stem = normalize(path.stem)
     score = 0
 
     if name == query:
         score += 100
-
-    if stem == query:
+    elif stem == query:
         score += 95
-
-    if query in name:
+    elif query in name:
         score += 80
-
-    if query in stem:
+    elif query in stem:
         score += 75
 
-    query_words = [
-        word
-        for word in query.split()
-        if len(word) >= 2
-    ]
-
+    query_words = [w for w in query.split() if len(w) >= 2]
     for word in query_words:
-
         if word in name:
             score += 15
-
         if word in stem:
             score += 12
 
-    # Prefer exact extension matches when supplied.
-    if "." in query:
-
-        if name == query:
-            score += 50
+    if "." in query and name.endswith(query.split(".")[-1]):
+        score += 20
 
     return score
 
 
-# =========================================================
-# DIRECTORY FILTER
-# =========================================================
-
-def should_skip_directory(
-    name: str,
-):
-    return (
-        name.lower()
-        in EXCLUDED_DIR_NAMES
-    )
+def should_skip_directory(name: str) -> bool:
+    return name.lower() in EXCLUDED_DIR_NAMES
 
 
 # =========================================================
-# SEARCH
+# SEARCH & OPEN
 # =========================================================
 
-def find_files(
-    query: str,
-    max_results: int = MAX_RESULTS,
-):
-    """
-    Search fixed Windows drives for files matching query.
-    """
-
+def find_files(query: str, max_results: int = MAX_RESULTS):
     query = query.strip()
-
     if not query:
         return []
 
     candidates = []
-
     scanned = 0
-
     drives = get_fixed_drives()
 
-    print(
-        f"[FILES] Searching drives: {drives}"
-    )
-
     for drive in drives:
-
-        for root, dirs, files in os.walk(
-            drive,
-            topdown=True,
-            onerror=lambda error: None,
-        ):
-
-            # Filter directories in-place.
-            dirs[:] = [
-                directory
-                for directory in dirs
-                if not should_skip_directory(
-                    directory
-                )
-            ]
+        for root, dirs, files in os.walk(drive, topdown=True, onerror=lambda e: None):
+            dirs[:] = [d for d in dirs if not should_skip_directory(d)]
 
             for filename in files:
-
                 scanned += 1
-
-                if (
-                    scanned
-                    > MAX_FILES_SCANNED
-                ):
+                if scanned > MAX_FILES_SCANNED:
                     break
 
                 try:
-
-                    path = Path(
-                        root
-                    ) / filename
-
-                    score = score_file(
-                        path,
-                        query,
-                    )
-
+                    path = Path(root) / filename
+                    score = score_file(path, query)
                     if score > 0:
-
                         try:
-                            modified = path.stat().st_mtime
+                            mtime = path.stat().st_mtime
                         except Exception:
-                            modified = 0
-
-                        candidates.append(
-                            (
-                                score,
-                                modified,
-                                path,
-                            )
-                        )
-
+                            mtime = 0
+                        candidates.append((score, mtime, path))
                 except Exception:
                     continue
 
-            if (
-                scanned
-                > MAX_FILES_SCANNED
-            ):
+            if scanned > MAX_FILES_SCANNED:
                 break
-
-        if (
-            scanned
-            > MAX_FILES_SCANNED
-        ):
+        if scanned > MAX_FILES_SCANNED:
             break
 
-    # Highest score first, then newest.
-    candidates.sort(
-        key=lambda item: (
-            item[0],
-            item[1],
-        ),
-        reverse=True,
-    )
-
-    return [
-        item[2]
-        for item in candidates[
-            :max_results
-        ]
-    ]
+    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return [item[2] for item in candidates[:max_results]]
 
 
-# =========================================================
-# OPEN FILE
-# =========================================================
-
-def open_file(
-    path: Path,
-):
-    """
-    Open the file with its Windows default application.
-    """
-
+def open_file(path: Path) -> str:
     if not path.exists():
-        return (
-            f"The file no longer exists: {path}"
-        )
+        return f"The file no longer exists: {path}"
+    try:
+        os.startfile(str(path))
+        return f"Opened '{path.name}', Sir."
+    except Exception as error:
+        return f"I found '{path.name}', but Windows couldn't open it: {error}"
 
-    if not path.is_file():
-        return (
-            f"That path is not a file: {path}"
-        )
+
+def find_and_open_file(query: str) -> str:
+    query = query.strip()
+    if not query:
+        return "What file should I find, Sir?"
+
+    results = find_files(query)
+    if not results:
+        return f"I couldn't find any file matching '{query}', Sir."
+
+    best = results[0]
+    result = open_file(best)
+
+    if len(results) > 1:
+        alts = "\n".join(f"- {p.name} ({p.parent})" for p in results[1:4])
+        return f"{result}\nOther matches:\n{alts}"
+    return result
+
+
+# =========================================================
+# FILE & DIRECTORY OPERATIONS
+# =========================================================
+
+def resolve_target_dir(location: str = "desktop") -> Path:
+    loc = location.lower().strip()
+    return STANDARD_DIRS.get(loc, STANDARD_DIRS["desktop"])
+
+
+def create_folder(folder_name: str, location: str = "desktop") -> str:
+    base_dir = resolve_target_dir(location)
+    target = base_dir / folder_name.strip()
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+        return f"Created folder '{folder_name}' on your {location.capitalize()}, Sir."
+    except Exception as error:
+        return f"Failed to create folder '{folder_name}': {error}"
+
+
+def create_file(file_name: str, location: str = "desktop", content: str = "") -> str:
+    base_dir = resolve_target_dir(location)
+    target = base_dir / file_name.strip()
+    try:
+        target.write_text(content, encoding="utf-8")
+        return f"Created file '{file_name}' on your {location.capitalize()}, Sir."
+    except Exception as error:
+        return f"Failed to create file '{file_name}': {error}"
+
+
+def delete_item(name_or_path: str) -> str:
+    target = Path(name_or_path.strip())
+    if not target.is_absolute():
+        matches = find_files(name_or_path, max_results=1)
+        if not matches:
+            return f"I couldn't locate '{name_or_path}' to delete, Sir."
+        target = matches[0]
 
     try:
-
-        os.startfile(
-            str(path)
-        )
-
-        return (
-            f"Opened '{path.name}'."
-        )
-
+        if target.is_file():
+            target.unlink()
+            return f"Deleted file '{target.name}', Sir."
+        elif target.is_dir():
+            shutil.rmtree(target)
+            return f"Deleted directory '{target.name}', Sir."
+        return f"Target not found: {target}"
     except Exception as error:
-
-        return (
-            f"I found '{path.name}', but Windows "
-            f"couldn't open it: {error}"
-        )
+        return f"Failed to delete '{target.name}': {error}"
 
 
-# =========================================================
-# FIND + OPEN
-# =========================================================
+def rename_item(current_name: str, new_name: str) -> str:
+    matches = find_files(current_name, max_results=1)
+    if not matches:
+        return f"I couldn't locate '{current_name}' to rename, Sir."
 
-def find_and_open_file(
-    query: str,
-):
-    """
-    Find the best matching file and open it.
-
-    Examples:
-        resume
-        invoice.pdf
-        project.py
-        report
-    """
-
-    query = query.strip()
-
-    if not query:
-
-        return (
-            "What file should I find, Sir?"
-        )
-
-    print(
-        f"[FILES] Looking for: {query}"
-    )
-
-    results = find_files(
-        query
-    )
-
-    if not results:
-
-        return (
-            f"I couldn't find a file matching "
-            f"'{query}', Sir."
-        )
-
-    # Best match.
-    best = results[0]
-
-    print(
-        "[FILES] Best match:"
-    )
-
-    print(
-        best
-    )
-
-    result = open_file(
-        best
-    )
-
-    # Show a few alternatives if useful.
-    if len(results) > 1:
-
-        alternatives = "\n".join(
-            str(path)
-            for path in results[1:5]
-        )
-
-        return (
-            f"{result}\n"
-            f"Other matches:\n"
-            f"{alternatives}"
-        )
-
-    return result
+    target = matches[0]
+    destination = target.parent / new_name.strip()
+    try:
+        target.rename(destination)
+        return f"Renamed '{target.name}' to '{new_name}', Sir."
+    except Exception as error:
+        return f"Failed to rename '{target.name}': {error}"

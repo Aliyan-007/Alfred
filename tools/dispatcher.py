@@ -1,24 +1,4 @@
 import re
-
-from tools.system import open_application
-from tools.file_finder import find_and_open_file
-
-from tools.spotify import (
-    play_spotify,
-    spotify_control,
-)
-
-from tools.youtube import (
-    play_youtube,
-    youtube_control,
-)
-
-from tools.media import (
-    pc_volume_up,
-    pc_volume_down,
-    pc_volume_mute,
-    pc_volume_unmute,
-)
 from tools.system import (
     open_application,
     close_application,
@@ -35,848 +15,286 @@ from tools.system import (
     get_cpu_information,
     get_memory_information,
     get_storage_information,
+    get_battery_information,
+    get_network_information,
+    take_screenshot,
+    get_clipboard_text,
+    set_clipboard_text,
+    clear_clipboard,
 )
+from tools.file_manager import (
+    find_and_open_file,
+    create_folder,
+    create_file,
+    delete_item,
+    rename_item,
+)
+from tools.browser import (
+    browser_search,
+    open_url,
+    new_tab,
+    close_active_tab,
+    browser_action,
+)
+from tools.media import (
+    pc_volume_up,
+    pc_volume_down,
+    pc_volume_mute,
+    pc_volume_unmute,
+    youtube_control,
+    spotify_control,
+)
+from tools.spotify import play_spotify
 
-# =========================================================
-# APPLICATION ALIASES
-# =========================================================
 
-APP_ALIASES = {
-    "notepad": "notepad",
-    "calculator": "calculator",
-    "calc": "calculator",
-    "explorer": "explorer",
-    "file explorer": "file explorer",
-    "chrome": "chrome",
-    "brave": "brave",
-    "brave browser": "brave",
-    "vscode": "vscode",
-    "vs code": "vs code",
-    "visual studio code": "vscode",
-}
-
-
-# =========================================================
-# NORMALIZE TEXT
-# =========================================================
-
-def normalize_text(
-    text: str,
-) -> str:
-    return (
-        text
-        .lower()
-        .strip()
-    )
+def normalize(text: str) -> str:
+    return re.sub(r"\s+", " ", text.lower().strip())
 
 
 # =========================================================
-# MEDIA PLAY COMMANDS
+# VOLUME DISPATCHER
 # =========================================================
 
-def handle_media_play(
-    text: str,
-):
-    """
-    Handle commands such as:
-
-        play Blinding Lights on Spotify
-        play Spider-Man trailer on YouTube
-        watch Sidemen on YouTube
-    """
-
-    normalized = normalize_text(
-        text
-    )
-
-    # -----------------------------------------------------
-    # Spotify
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^\s*(?:play|listen to|put on)\s+(.+?)"
-        r"\s+(?:on|in)\s+spotify\s*$",
-        normalized,
-        re.IGNORECASE,
-    )
-
-    if match:
-
-        query = match.group(1).strip()
-
-        return play_spotify(
-            query
-        )
-
-    match = re.match(
-        r"^\s*(?:search|find)\s+spotify\s+for\s+(.+?)\s*$",
-        normalized,
-        re.IGNORECASE,
-    )
-
-    if match:
-
-        query = match.group(1).strip()
-
-        return play_spotify(
-            query
-        )
-
-    # -----------------------------------------------------
-    # YouTube
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^\s*(?:play|watch)\s+(.+?)"
-        r"\s+(?:on|in)\s+youtube\s*$",
-        normalized,
-        re.IGNORECASE,
-    )
-
-    if match:
-
-        query = match.group(1).strip()
-
-        return play_youtube(
-            query
-        )
-
-    match = re.match(
-        r"^\s*(?:search|find)\s+youtube\s+for\s+(.+?)\s*$",
-        normalized,
-        re.IGNORECASE,
-    )
-
-    if match:
-
-        query = match.group(1).strip()
-
-        return play_youtube(
-            query
-        )
-
-    return None
-
-
-# =========================================================
-# EXPLICIT SPOTIFY CONTROLS
-# =========================================================
-
-def handle_spotify_control(
-    text: str,
-):
-    normalized = normalize_text(
-        text
-    )
-
-    patterns = {
-
-        "pause": [
-            r"^pause spotify$",
-            r"^pause spotify music$",
-            r"^stop spotify$",
-        ],
-
-        "resume": [
-            r"^resume spotify$",
-            r"^resume spotify music$",
-            r"^play spotify$",
-            r"^continue spotify$",
-        ],
-
-        "next": [
-            r"^next song on spotify$",
-            r"^next on spotify$",
-            r"^skip song on spotify$",
-            r"^skip on spotify$",
-        ],
-
-        "previous": [
-            r"^previous song on spotify$",
-            r"^previous on spotify$",
-            r"^go back on spotify$",
-        ],
-    }
-
-    for action, expressions in patterns.items():
-
-        if any(
-            re.match(
-                pattern,
-                normalized,
-            )
-            for pattern in expressions
-        ):
-
-            return spotify_control(
-                action
-            )
-
-    return None
-
-
-# =========================================================
-# EXPLICIT YOUTUBE CONTROLS
-# =========================================================
-
-def handle_youtube_control(
-    text: str,
-):
-    normalized = normalize_text(
-        text
-    )
-
-    patterns = {
-
-        "pause": [
-            r"^pause youtube$",
-            r"^pause youtube video$",
-            r"^pause the video$",
-        ],
-
-        "resume": [
-            r"^resume youtube$",
-            r"^resume youtube video$",
-            r"^resume the video$",
-            r"^continue youtube$",
-            r"^continue the video$",
-        ],
-
-        "play": [
-            r"^play youtube$",
-            r"^play the video$",
-        ],
-
-        "stop": [
-            r"^stop youtube$",
-            r"^stop the video$",
-        ],
-
-        "next": [
-            r"^next video on youtube$",
-            r"^next on youtube$",
-            r"^skip youtube video$",
-        ],
-
-        "previous": [
-            r"^previous video on youtube$",
-            r"^previous on youtube$",
-            r"^go back on youtube$",
-        ],
-
-        "volume_up": [
-            r"^youtube volume up$",
-            r"^increase youtube volume$",
-            r"^make youtube louder$",
-        ],
-
-        "volume_down": [
-            r"^youtube volume down$",
-            r"^decrease youtube volume$",
-            r"^make youtube quieter$",
-        ],
-
-        "fullscreen": [
-            r"^fullscreen youtube$",
-            r"^youtube fullscreen$",
-            r"^put youtube in fullscreen$",
-            r"^make youtube fullscreen$",
-            r"^fullscreen the video$",
-            r"^make the video fullscreen$",
-            r"^make this video fullscreen$",
-        ],
-    }
-
-    for action, expressions in patterns.items():
-
-        if any(
-            re.match(
-                pattern,
-                normalized,
-            )
-            for pattern in expressions
-        ):
-
-            return youtube_control(
-                action
-            )
-
-    return None
-
-
-# =========================================================
-# GENERIC MEDIA CONTROLS
-# =========================================================
-
-def handle_generic_media_control(
-    text: str,
-):
-    """
-    Handle simple commands without an explicit service.
-
-    Examples:
-
-        pause
-        resume
-        next
-        previous
-    """
-
-    normalized = normalize_text(
-        text
-    )
-
-    # We deliberately do not guess between Spotify and
-    # YouTube here unless the command is completely generic.
-    #
-    # Your AI brain can make the intelligent decision for
-    # natural-language commands.
-
-    if normalized in {
-        "pause",
-        "pause music",
-    }:
-
-        return spotify_control(
-            "pause"
-        )
-
-    if normalized in {
-        "resume",
-        "resume music",
-        "continue",
-        "continue playing",
-    }:
-
-        return spotify_control(
-            "resume"
-        )
-
-    if normalized in {
-        "next",
-        "next song",
-        "next track",
-    }:
-
-        return spotify_control(
-            "next"
-        )
-
-    if normalized in {
-        "previous",
-        "previous song",
-        "previous track",
-    }:
-
-        return spotify_control(
-            "previous"
-        )
-
-    return None
-
-
-# =========================================================
-# PC MASTER VOLUME
-# =========================================================
-
-def handle_pc_volume(
-    text: str,
-):
-    normalized = normalize_text(
-        text
-    )
-
-    # -----------------------------------------------------
-    # Volume up
-    # -----------------------------------------------------
-
-    if normalized in {
-        "volume up",
-        "increase volume",
-        "turn volume up",
-        "turn the volume up",
-        "make it louder",
-        "make the computer louder",
-        "make the pc louder",
-        "louder",
-        "increase pc volume",
-        "increase computer volume",
-    }:
-
+def handle_volume_command(text: str):
+    norm = normalize(text)
+    if norm in {"volume up", "increase volume", "louder", "turn it up"}:
         return pc_volume_up()
-
-    # -----------------------------------------------------
-    # Volume down
-    # -----------------------------------------------------
-
-    if normalized in {
-        "volume down",
-        "decrease volume",
-        "turn volume down",
-        "turn the volume down",
-        "make it quieter",
-        "make the computer quieter",
-        "make the pc quieter",
-        "quieter",
-        "lower the volume",
-        "decrease pc volume",
-        "decrease computer volume",
-    }:
-
+    if norm in {"volume down", "decrease volume", "softer", "lower volume", "turn it down"}:
         return pc_volume_down()
-
-    # -----------------------------------------------------
-    # Mute
-    # -----------------------------------------------------
-
-    if normalized in {
-        "mute",
-        "mute pc",
-        "mute computer",
-        "mute volume",
-        "mute the computer",
-        "mute the pc",
-    }:
-
+    if norm in {"mute", "mute pc", "mute audio", "silence"}:
         return pc_volume_mute()
-
-    # -----------------------------------------------------
-    # Unmute
-    # -----------------------------------------------------
-
-    if normalized in {
-        "unmute",
-        "unmute pc",
-        "unmute computer",
-        "unmute volume",
-        "unmute the computer",
-        "unmute the pc",
-    }:
-
+    if norm in {"unmute", "unmute pc", "unmute audio"}:
         return pc_volume_unmute()
-
     return None
 
 
 # =========================================================
-# WINDOWS APPLICATION COMMANDS
+# SYSTEM & UTILITIES DISPATCHER
 # =========================================================
 
-def handle_application_command(
-    text: str,
-):
-    """
-    Open approved Windows applications.
-    """
+def handle_system_command(text: str):
+    norm = normalize(text)
 
-    match = re.match(
-        r"^\s*(?:open|launch|start)\s+(.+?)\s*$",
-        text,
-        re.IGNORECASE,
-    )
+    # Screenshots
+    if norm in {"take a screenshot", "take screenshot", "capture screen", "screenshot"}:
+        return take_screenshot()
 
-    if not match:
-        return None
+    # Clipboard
+    if norm in {"read clipboard", "what is on my clipboard", "clipboard content", "check clipboard"}:
+        return get_clipboard_text()
+    if norm in {"clear clipboard", "empty clipboard"}:
+        return clear_clipboard()
+    match = re.match(r"^copy\s+(.+?)\s+to clipboard$", norm)
+    if match:
+        return set_clipboard_text(match.group(1))
 
-    requested_app = (
-        match.group(1)
-        .strip()
-        .lower()
-    )
-
-    app = APP_ALIASES.get(
-        requested_app
-    )
-
-    if app is None:
-        return None
-
-    return open_application(
-        app
-    )
-
-# =========================================================
-# WINDOWS SYSTEM COMMANDS
-# =========================================================
-
-def handle_system_command(
-    text: str,
-):
-
-    normalized = normalize_text(
-        text
-    )
-
-    # -----------------------------------------------------
-    # LOCK
-    # -----------------------------------------------------
-
-    if normalized in {
-        "lock pc",
-        "lock the pc",
-        "lock computer",
-        "lock the computer",
-        "lock my pc",
-        "lock my computer",
-    }:
-
+    # Power State
+    if norm in {"lock pc", "lock the pc", "lock computer"}:
         return lock_pc()
-
-    # -----------------------------------------------------
-    # SHUTDOWN
-    # -----------------------------------------------------
-
-    if normalized in {
-        "shutdown",
-        "shut down",
-        "shutdown pc",
-        "shut down pc",
-        "shutdown computer",
-        "shut down computer",
-        "turn off pc",
-        "turn off computer",
-    }:
-
+    if norm in {"shutdown pc", "turn off pc", "turn off computer"}:
         return shutdown_pc()
-
-    # -----------------------------------------------------
-    # RESTART
-    # -----------------------------------------------------
-
-    if normalized in {
-        "restart",
-        "restart pc",
-        "restart computer",
-        "reboot",
-        "reboot pc",
-        "reboot computer",
-    }:
-
+    if norm in {"restart pc", "restart computer", "reboot pc"}:
         return restart_pc()
-
-    # -----------------------------------------------------
-    # SLEEP
-    # -----------------------------------------------------
-
-    if normalized in {
-        "sleep",
-        "sleep pc",
-        "sleep computer",
-        "put pc to sleep",
-        "put computer to sleep",
-    }:
-
+    if norm in {"sleep pc", "put pc to sleep"}:
         return sleep_pc()
-
-    # -----------------------------------------------------
-    # SIGN OUT
-    # -----------------------------------------------------
-
-    if normalized in {
-        "sign out",
-        "sign me out",
-        "log out",
-        "log me out",
-    }:
-
+    if norm in {"sign out", "log out", "sign me out"}:
         return sign_out()
-
-    # -----------------------------------------------------
-    # CANCEL SHUTDOWN
-    # -----------------------------------------------------
-
-    if normalized in {
-        "cancel shutdown",
-        "cancel the shutdown",
-        "abort shutdown",
-    }:
-
+    if norm in {"cancel shutdown", "abort shutdown"}:
         return cancel_shutdown()
 
-    # -----------------------------------------------------
-    # SYSTEM INFORMATION
-    # -----------------------------------------------------
-
-    if normalized in {
-        "system information",
-        "system info",
-        "pc information",
-        "pc info",
-        "computer information",
-        "computer info",
-        "what are my pc specs",
-        "show pc specs",
-    }:
-
+    # Telemetry
+    if norm in {"system info", "system information", "pc specs", "specs"}:
         return get_system_information()
-
-    # -----------------------------------------------------
-    # CPU
-    # -----------------------------------------------------
-
-    if normalized in {
-        "cpu usage",
-        "cpu status",
-        "processor usage",
-        "how much cpu am i using",
-    }:
-
+    if norm in {"cpu usage", "cpu", "processor usage"}:
         return get_cpu_information()
-
-    # -----------------------------------------------------
-    # RAM
-    # -----------------------------------------------------
-
-    if normalized in {
-        "ram usage",
-        "ram status",
-        "memory usage",
-        "memory status",
-        "how much ram am i using",
-    }:
-
+    if norm in {"ram usage", "ram", "memory usage"}:
         return get_memory_information()
-
-    # -----------------------------------------------------
-    # STORAGE
-    # -----------------------------------------------------
-
-    if normalized in {
-        "storage",
-        "storage usage",
-        "disk usage",
-        "disk space",
-        "how much storage do i have",
-        "how much storage is left",
-    }:
-
+    if norm in {"storage", "storage usage", "disk space", "disk usage"}:
         return get_storage_information()
+    if norm in {"battery", "battery percentage", "battery status", "power status"}:
+        return get_battery_information()
+    if norm in {"ip address", "network info", "network status", "what is my ip"}:
+        return get_network_information()
 
-    # -----------------------------------------------------
-    # CLOSE APPLICATION
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^(?:close|quit|exit)\s+(.+)$",
-        normalized,
-    )
-
+    # Window Management
+    match = re.match(r"^(?:close|quit|exit)\s+(.+)$", norm)
     if match:
+        return close_application(match.group(1))
 
-        application = match.group(
-            1
-        ).strip()
-
-        return close_application(
-            application
-        )
-
-    # -----------------------------------------------------
-    # MINIMIZE APPLICATION
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^(?:minimize|minimise)\s+(.+)$",
-        normalized,
-    )
-
+    match = re.match(r"^(?:minimize|minimise)\s+(.+)$", norm)
     if match:
+        return minimize_application(match.group(1))
 
-        application = match.group(
-            1
-        ).strip()
-
-        return minimize_application(
-            application
-        )
-
-    # -----------------------------------------------------
-    # MAXIMIZE APPLICATION
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^(?:maximize|maximise)\s+(.+)$",
-        normalized,
-    )
-
+    match = re.match(r"^(?:maximize|maximise)\s+(.+)$", norm)
     if match:
+        return maximize_application(match.group(1))
 
-        application = match.group(
-            1
-        ).strip()
-
-        return maximize_application(
-            application
-        )
-
-    # -----------------------------------------------------
-    # SWITCH APPLICATION
-    # -----------------------------------------------------
-
-    match = re.match(
-        r"^(?:switch to|go to|bring up)\s+(.+)$",
-        normalized,
-    )
-
+    match = re.match(r"^(?:switch to|switch app to|focus)\s+(.+)$", norm)
     if match:
-
-        application = match.group(
-            1
-        ).strip()
-
-        return activate_application(
-            application
-        )
+        return activate_application(match.group(1))
 
     return None
+
+
 # =========================================================
-# MAIN DISPATCHER
+# BROWSER DISPATCHER
 # =========================================================
 
-def handle_command(
-    user_input: str,
-):
-    """
-    Route exact/local commands.
+def handle_browser_command(text: str):
+    norm = normalize(text)
 
-    Natural-language commands that do not match these
-    patterns are passed to the AI brain by main.py.
-    """
+    if norm in {"new tab", "open new tab"}:
+        return new_tab()
+    if norm in {"close tab", "close current tab"}:
+        return close_active_tab()
+    if norm in {"refresh", "reload tab", "refresh page"}:
+        return browser_action("refresh")
+    if norm in {"go back", "browser back"}:
+        return browser_action("back")
+    if norm in {"go forward", "browser forward"}:
+        return browser_action("forward")
 
-    if not user_input:
+    # Search & Direct Navigation
+    match = re.match(r"^(?:google|search for|search google for)\s+(.+)$", norm)
+    if match:
+        return browser_search(match.group(1), engine="google")
+
+    match = re.match(r"^(?:open website|open url|go to)\s+(https?://\S+|\S+\.\S+)$", norm)
+    if match:
+        return open_url(match.group(1))
+
+    return None
+
+
+# =========================================================
+# MEDIA DISPATCHER
+# =========================================================
+
+def handle_media_command(text: str):
+    norm = normalize(text)
+
+    # Spotify Search & Play
+    match = re.match(r"^(?:play|listen to)\s+(.+)\s+on spotify$", norm)
+    if match:
+        return play_spotify(match.group(1))
+
+    # YouTube Search & Play
+    match = re.match(r"^(?:play|watch)\s+(.+)\s+on youtube$", norm)
+    if match:
+        return browser_search(match.group(1), engine="youtube")
+
+    # Target controls
+    if norm.startswith("spotify "):
+        action = norm.replace("spotify ", "").strip()
+        if action in {"pause", "resume", "play", "next", "previous"}:
+            return spotify_control("resume" if action == "play" else action)
+
+    if norm.startswith("youtube "):
+        action = norm.replace("youtube ", "").strip()
+        if action in {"pause", "resume", "play", "stop", "next", "previous"}:
+            return youtube_control("resume" if action == "play" else action)
+
+    # Generic Playback fallback
+    if norm in {"pause", "pause music", "pause playback"}:
+        res = spotify_control("pause")
+        return res if "could not" not in res and "No open" not in res else youtube_control("pause")
+
+    if norm in {"resume", "resume music", "play music"}:
+        res = spotify_control("resume")
+        return res if "could not" not in res and "No open" not in res else youtube_control("resume")
+
+    if norm in {"next song", "next track"}:
+        return spotify_control("next")
+
+    if norm in {"previous song", "previous track"}:
+        return spotify_control("previous")
+
+    return None
+
+
+# =========================================================
+# FILE & DIRECTORY DISPATCHER
+# =========================================================
+
+def handle_file_command(text: str):
+    norm = normalize(text)
+
+    match = re.match(r"^(?:find file|locate file|search file|open file|find)\s+(.+)$", norm)
+    if match:
+        return find_and_open_file(match.group(1).strip())
+
+    match = re.match(r"^create folder\s+(.+?)(?:\s+on\s+(\w+))?$", norm)
+    if match:
+        folder_name = match.group(1)
+        location = match.group(2) or "desktop"
+        return create_folder(folder_name, location)
+
+    match = re.match(r"^create file\s+(.+?)(?:\s+on\s+(\w+))?$", norm)
+    if match:
+        file_name = match.group(1)
+        location = match.group(2) or "desktop"
+        return create_file(file_name, location)
+
+    match = re.match(r"^(?:delete file|delete folder|delete)\s+(.+)$", norm)
+    if match:
+        return delete_item(match.group(1))
+
+    match = re.match(r"^rename\s+(.+?)\s+to\s+(.+)$", norm)
+    if match:
+        return rename_item(match.group(1), match.group(2))
+
+    return None
+
+
+# =========================================================
+# APPLICATION LAUNCH DISPATCHER (DYNAMIC)
+# =========================================================
+
+def handle_application_command(text: str):
+    norm = normalize(text)
+    match = re.match(r"^(?:open|launch|start)\s+(.+)$", norm)
+    if match:
+        return open_application(match.group(1).strip())
+    return None
+
+
+# =========================================================
+# MASTER DISPATCHER ENTRYPOINT
+# =========================================================
+
+def handle_command(text: str):
+    if not text or not text.strip():
         return None
 
-    text = user_input.strip()
+    # 1. Volume
+    res = handle_volume_command(text)
+    if res is not None:
+        return res
 
-    # =====================================================
-    # WINDOWS SYSTEM
-    # =====================================================
+    # 2. System, Power, Window & Utilities
+    res = handle_system_command(text)
+    if res is not None:
+        return res
 
-    result = handle_system_command(
-        text
-    )
+    # 3. Browser
+    res = handle_browser_command(text)
+    if res is not None:
+        return res
 
-    if result is not None:
-        return result
+    # 4. Media
+    res = handle_media_command(text)
+    if res is not None:
+        return res
 
-    # =====================================================
-    # PC VOLUME
-    # =====================================================
+    # 5. Files
+    res = handle_file_command(text)
+    if res is not None:
+        return res
 
-    result = handle_pc_volume(
-        text
-    )
+    # 6. Applications (Dynamic Indexer)
+    res = handle_application_command(text)
+    if res is not None:
+        return res
 
-    if result is not None:
-        return result
-
-    # =====================================================
-    # SPOTIFY PLAY
-    # =====================================================
-
-    result = handle_media_play(
-        text
-    )
-
-    if result is not None:
-        return result
-
-    # =====================================================
-    # EXPLICIT SPOTIFY CONTROLS
-    # =====================================================
-
-    result = handle_spotify_control(
-        text
-    )
-
-    if result is not None:
-        return result
-
-    # =====================================================
-    # EXPLICIT YOUTUBE CONTROLS
-    # =====================================================
-
-    result = handle_youtube_control(
-        text
-    )
-
-    if result is not None:
-        return result
-
-    # =====================================================
-    # GENERIC MEDIA
-    # =====================================================
-
-    result = handle_generic_media_control(
-        text
-    )
-
-    if result is not None:
-        return result
-
-    # =====================================================
-    # WINDOWS APPLICATION
-    # =====================================================
-
-    result = handle_application_command(
-        text
-    )
-
-    if result is not None:
-        return result
-
-    # =====================================================
-    # NO EXACT COMMAND
-    # =====================================================
-    
-    # =====================================================
-    # FILE COMMAND
-    # =====================================================
-
-    result = handle_file_command(
-        text
-    )
-
-    if result is not None:
-        return result
-    
-    return None
-
-def handle_file_command(
-    text: str,
-):
-    normalized = normalize_text(text)
-
-    patterns = [
-        r"^find (.+)$",
-        r"^locate (.+)$",
-        r"^open file (.+)$",
-        r"^open the file (.+)$",
-        r"^find file (.+)$",
-        r"^find the file (.+)$",
-    ]
-
-    for pattern in patterns:
-
-        match = re.match(
-            pattern,
-            normalized,
-            re.IGNORECASE,
-        )
-
-        if match:
-
-            query = match.group(1).strip()
-
-            # Prevent ordinary "find/open" application
-            # commands from being treated as file requests.
-            if not query:
-                return None
-
-            return find_and_open_file(
-                query
-            )
-
-        
-
+    # 7. AI Brain Fallback
     return None
