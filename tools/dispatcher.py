@@ -3,7 +3,7 @@ import re
 from pathlib import Path
 from urllib.parse import quote_plus
 
-from tools import network, bluetooth, display, hardware
+from tools import network, bluetooth, display, hardware, system
 
 from tools.system import (
     open_application,
@@ -141,6 +141,15 @@ def handle_volume_command(text: str):
         "dimmer",
     }:
         return display.adjust_brightness(-15)
+
+    if norm in {
+        "brightness status",
+        "show brightness",
+        "what brightness",
+        "brightness info",
+        "current brightness",
+    }:
+        return display.get_brightness()
 
     match = re.match(r"^set brightness to (\d+)$", norm)
     if match:
@@ -422,6 +431,42 @@ def handle_system_command(text: str):
 
     if norm in {"full network status", "show full network status", "network diagnostics"}:
         return network.get_network_status()
+
+    if norm in {
+        "usb devices",
+        "show usb devices",
+        "list usb devices",
+        "what usb devices are connected",
+        "show my usb devices",
+        "hardware devices",
+        "show my hardware devices",
+        "list hardware devices",
+    }:
+        return system.get_usb_inventory()
+
+    if norm in {
+        "audio devices",
+        "show audio devices",
+        "list audio devices",
+        "what speakers do i have",
+        "what microphones do i have",
+        "list my microphones",
+        "list my audio outputs",
+        "show my audio devices",
+    }:
+        return system.get_audio_device_inventory()
+
+    if norm in {
+        "display information",
+        "show display information",
+        "show my display information",
+        "monitor info",
+        "show my monitors",
+        "what monitors do i have",
+        "show monitors",
+        "display devices",
+    }:
+        return system.get_display_information()
 
     # -----------------------------------------------------
     # APPLICATION CONTROL

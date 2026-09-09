@@ -3,57 +3,78 @@ import sys
 import time
 from pathlib import Path
 
-from openwakeword.model import Model
-
-from assistants.router import detect_assistant
-from brain import ask_brain
-from tools.browser import ensure_brave
-from tools.dispatcher import handle_command
-from voice.recorder import record_audio
-from voice.stt import transcribe_audio
-from voice.tts import initialize_tts, speak
-from voice.wake_word import wait_for_wake_word, set_speaking
-
-
-# =========================================================
-# WAKE WORD CONFIGURATION
-# =========================================================
-
 BASE_DIR = Path(__file__).resolve().parent
 
-CANDIDATE_PATHS = [
-    BASE_DIR / "alfred.onnx",
-    BASE_DIR / "models" / "alfred.onnx",
-    BASE_DIR / "voice" / "alfred.onnx",
-    Path("D:/alfred/alfred.onnx"),
-]
-
 WAKE_WORD_MODEL = None
-for candidate in CANDIDATE_PATHS:
-    if candidate.exists():
-        WAKE_WORD_MODEL = str(candidate)
-        break
 
-if not WAKE_WORD_MODEL:
-    print("\n[WARNING] 'alfred.onnx' not found! Falling back to alexa_v0.1")
-    WAKE_WORD_MODEL = "alexa_v0.1"
-else:
-    print(f"\n[WAKE WORD] Custom model loaded: {WAKE_WORD_MODEL}")
+
+def resolve_wake_word_model():
+    global WAKE_WORD_MODEL
+
+    if WAKE_WORD_MODEL is not None:
+        return WAKE_WORD_MODEL
+
+    candidate_paths = [
+        BASE_DIR / "alfred.onnx",
+        BASE_DIR / "models" / "alfred.onnx",
+        BASE_DIR / "voice" / "alfred.onnx",
+        Path("D:/alfred/alfred.onnx"),
+    ]
+
+    for candidate in candidate_paths:
+        if candidate.exists():
+            WAKE_WORD_MODEL = str(candidate)
+            break
+
+    if not WAKE_WORD_MODEL:
+        print("\n[WARNING] 'alfred.onnx' not found! Falling back to alexa_v0.1")
+        WAKE_WORD_MODEL = "alexa_v0.1"
+    else:
+        print(f"\n[WAKE WORD] Custom model loaded: {WAKE_WORD_MODEL}")
+
+    return WAKE_WORD_MODEL
 
 
 # =========================================================
 # HELPER: SAFE SPEAK
 # =========================================================
 
+def _lazy_import(module_name: str, symbol: str):
+    module = __import__(module_name, fromlist=[symbol])
+    return getattr(module, symbol)
+
+
+def record_audio(*args, **kwargs):
+    return _lazy_import("voice.recorder", "record_audio")(*args, **kwargs)
+
+
+def transcribe_audio(*args, **kwargs):
+    return _lazy_import("voice.stt", "transcribe_audio")(*args, **kwargs)
+
+
+def handle_command(*args, **kwargs):
+    return _lazy_import("tools.dispatcher", "handle_command")(*args, **kwargs)
+
+
+def ask_brain(*args, **kwargs):
+    return _lazy_import("brain", "ask_brain")(*args, **kwargs)
+
+
+def detect_assistant(*args, **kwargs):
+    return _lazy_import("assistants.router", "detect_assistant")(*args, **kwargs)
+
+
 def safe_speak(text: str, assistant: str = "ALFRED"):
     """Block wake-word detection while Alfred speaks (kills echo bleed)."""
+    from voice.tts import speak
+    from voice.wake_word import set_speaking
+
     try:
         set_speaking(True)
         speak(text, assistant)
     except Exception as error:
         print(f"[TTS Error] {error}")
     finally:
-        # Extra echo tail to let audio drivers flush
         time.sleep(0.5)
         set_speaking(False)
 
@@ -62,37 +83,45 @@ def safe_speak(text: str, assistant: str = "ALFRED"):
 # STARTUP BANNER
 # =========================================================
 
-print()
-print("=" * 55)
-print("                    ALFRED")
-print("=" * 55)
-print()
+def initialize_runtime():
+    from openwakeword.model import Model
 
-# Initialize all subsystems
-print("Starting ALFRED Brave browser...")
-try:
-    ensure_brave()
-except Exception:
-    pass
+    from tools.browser import ensure_brave
+    from voice.tts import initialize_tts
 
-print("Initializing voice system...")
-try:
-    initialize_tts(wait=False)
-except Exception:
-    pass
+    print()
+    print("=" * 55)
+    print("                    ALFRED")
+    print("=" * 55)
+    print()
 
-print("Loading wake-word engine...")
-try:
-    wake_model = Model(wakeword_models=[WAKE_WORD_MODEL], inference_framework="onnx")
-except Exception:
+    model_path = resolve_wake_word_model()
+
+    print("Starting ALFRED Brave browser...")
     try:
-        wake_model = Model(wakeword_models=[WAKE_WORD_MODEL])
-    except Exception as err:
-        print(f"Failed loading wake word: {err}")
-        raise SystemExit(1)
+        ensure_brave()
+    except Exception:
+        pass
 
-print("\nALFRED systems ready and online.")
-print("Say 'shutdown alfred' to exit.\n")
+    print("Initializing voice system...")
+    try:
+        initialize_tts(wait=False)
+    except Exception:
+        pass
+
+    print("Loading wake-word engine...")
+    try:
+        wake_model = Model(wakeword_models=[model_path], inference_framework="onnx")
+    except Exception:
+        try:
+            wake_model = Model(wakeword_models=[model_path])
+        except Exception as err:
+            print(f"Failed loading wake word: {err}")
+            raise SystemExit(1)
+
+    print("\nALFRED systems ready and online.")
+    print("Say 'shutdown alfred' to exit.\n")
+    return wake_model
 
 
 # =========================================================
@@ -102,13 +131,21 @@ print("Say 'shutdown alfred' to exit.\n")
 def process_command():
     print("Listening for your command...")
 
-    audio_file = record_audio()
-    if not audio_file:
-        return
+    try:
+        audio_file = record_audio()
+        if not audio_file:
+            print("[ALFRED] No command captured; returning to listening mode.")
+            return None
 
-    user_input = transcribe_audio(audio_file)
+        user_input = transcribe_audio(audio_file)
+    except Exception as error:
+        print(f"[ALFRED] Voice transcription failed: {error}")
+        print("[ALFRED] Returning to listening mode.")
+        return None
+
     if not user_input or not user_input.strip():
-        return
+        print("[ALFRED] Empty transcription; returning to listening mode.")
+        return None
 
     print()
     print(f"You: {user_input}")
@@ -119,7 +156,7 @@ def process_command():
     # Discard mic artifacts
     if normalized_input in {"you", "thank you", "thanks", "subtitles by", "bye", "go", "yeah", "yes"}:
         print("[ALFRED] Discarded brief mic artifact.")
-        return
+        return None
 
     # Program shutdown. Require an explicit shutdown phrase so ordinary
     # microphone noise or casual speech does not terminate the assistant.
@@ -143,7 +180,7 @@ def process_command():
     if normalized_input in {"stop listening", "go to sleep", "stand down"}:
         print("ALFRED: Standing down. Call me when you need me, Sir.")
         safe_speak("Standing down. Call me when you need me, Sir.", "ALFRED")
-        return
+        return None
 
     # Persona
     try:
@@ -166,25 +203,39 @@ def process_command():
 
     print(f"{assistant}: {answer}")
     print()
-    safe_speak(answer, assistant)
+    try:
+        safe_speak(answer, assistant)
+    except Exception as error:
+        print(f"[ALFRED] Answer speaking failed: {error}")
+
+    return answer
 
 
 # =========================================================
 # MAIN LOOP
 # =========================================================
 
-while True:
-    try:
-        wait_for_wake_word(wake_model)
-        process_command()
-        time.sleep(1.0)
+def main_loop():
+    from voice.wake_word import wait_for_wake_word
 
-    except SystemExit:
-        print("\nALFRED: Shutdown complete.")
-        break
-    except KeyboardInterrupt:
-        print("\nALFRED: Goodbye, Sir.")
-        break
-    except Exception as error:
-        print(f"\nSystem error: {error}\n")
-        time.sleep(1.0)
+    wake_model = initialize_runtime()
+
+    while True:
+        try:
+            wait_for_wake_word(wake_model)
+            process_command()
+            time.sleep(1.0)
+
+        except SystemExit:
+            print("\nALFRED: Shutdown complete.")
+            break
+        except KeyboardInterrupt:
+            print("\nALFRED: Goodbye, Sir.")
+            break
+        except Exception as error:
+            print(f"\nSystem error: {error}\n")
+            time.sleep(1.0)
+
+
+if __name__ == "__main__":
+    main_loop()

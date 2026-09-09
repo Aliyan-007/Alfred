@@ -6,17 +6,12 @@ from groq import Groq
 
 load_dotenv()
 
-api_key = os.getenv("GROQ_API_KEY")
 
-if not api_key:
-    raise RuntimeError(
-        "GROQ_API_KEY is missing from .env"
-    )
-
-
-client = Groq(
-    api_key=api_key
-)
+def _get_client():
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise RuntimeError("GROQ_API_KEY is missing from .env")
+    return Groq(api_key=api_key)
 
 
 def transcribe_audio(audio_file: str) -> str:
@@ -25,9 +20,9 @@ def transcribe_audio(audio_file: str) -> str:
 
     Whisper automatically detects the spoken language.
     """
+    client = _get_client()
 
     with open(audio_file, "rb") as file:
-
         transcription = client.audio.transcriptions.create(
             file=(
                 audio_file,

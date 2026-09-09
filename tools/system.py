@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import subprocess
@@ -1024,6 +1025,213 @@ def get_running_applications():
 def get_current_datetime() -> str:
     from datetime import datetime
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_usb_inventory() -> list[dict]:
+    """Return a read-only USB inventory using Windows PnP metadata."""
+    script = (
+        "Get-PnpDevice -PresentOnly -ErrorAction SilentlyContinue | "
+        "Where-Object { $_.Class -eq 'USB' -or $_.FriendlyName -match 'USB' } | "
+        "Select-Object FriendlyName, Manufacturer, Status, Class, InstanceId, Present | "
+        "ConvertTo-Json -Depth 6"
+    )
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        payload = (result.stdout or "").strip()
+        if not payload:
+            return []
+        parsed = json.loads(payload)
+        if isinstance(parsed, list):
+            return parsed
+        if isinstance(parsed, dict):
+            return [parsed]
+        return []
+    except Exception:
+        return []
+
+
+def get_audio_device_inventory() -> dict:
+    """Return local, read-only audio device metadata where Windows exposes it."""
+    result = {
+        "playback": [],
+        "recording": [],
+        "default_playback": None,
+        "default_microphone": None,
+        "limitation": None,
+    }
+
+    try:
+        codec_script = (
+            "if (Get-Command Get-AudioDevice -ErrorAction SilentlyContinue) { "
+            "Get-AudioDevice | Select-Object Name, Type, Default, Status | ConvertTo-Json -Depth 6 "
+            "} else { '[]' }"
+        )
+        codec_result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", codec_script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        codec_data = (codec_result.stdout or "").strip()
+        if codec_data and codec_data != "[]":
+            parsed_data = json.loads(codec_data)
+            if isinstance(parsed_data, list):
+                for item in parsed_data:
+                    name = str(item.get("Name") or item.get("name") or "Unknown device").strip()
+                    device_type = str(item.get("Type") or item.get("type") or "device").strip()
+                    device_status = str(item.get("Status") or item.get("status") or "unknown").strip()
+                    default_flag = bool(item.get("Default") or item.get("default"))
+                    if device_type.lower() in {"speaker", "playback", "output"}:
+                        clean = {"name": name, "type": device_type, "status": device_status, "default": default_flag}
+                        result["playback"].append(clean)
+                        if default_flag:
+                            result["default_playback"] = name
+                    elif device_type.lower() in {"microphone", "recording", "input"}:
+                        clean = {"name": name, "type": device_type, "status": device_status, "default": default_flag}
+                        result["recording"].append(clean)
+                        if default_flag:
+                            result["default_microphone"] = name
+    except Exception:
+        pass
+
+    if not result["playback"] and not result["recording"]:
+        try:
+            fallback_script = (
+                "Get-CimInstance Win32_SoundDevice -ErrorAction SilentlyContinue | "
+                "Select-Object Name, Status, Manufacturer, Caption | ConvertTo-Json -Depth 6"
+            )
+            fallback_result = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", fallback_script],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            fallback_payload = (fallback_result.stdout or "").strip()
+            if fallback_payload and fallback_payload != "[]":
+                parsed = json.loads(fallback_payload)
+                if isinstance(parsed, list):
+                    result["playback"] = [{"name": item.get("Name") or item.get("Caption") or "Audio device", "type": "device", "status": item.get("Status") or "unknown", "default": False} for item in parsed]
+                    result["recording"] = list(result["playback"])
+        except Exception:
+            result["limitation"] = "Windows did not expose audio device metadata in this environment."
+
+    if not result["limitation"] and not result["playback"] and not result["recording"]:
+        result["limitation"] = "No audio devices were exposed by Windows in the current environment."
+
+    return result
+
+
+def get_display_information() -> dict:
+    """Return read-only monitor information from Windows WMI / CIM when available."""
+    payload = {
+        "monitors": [],
+        "count": 0,
+        "primary_monitor": None,
+        "limitation": None,
+    }
+
+    try:
+        monitor_script = (
+            "Get-CimInstance Win32_DesktopMonitor -ErrorAction SilentlyContinue | "
+            "Select-Object Name, Status, MonitorType, PNPDeviceID, ScreenHeight, ScreenWidth | "
+            "ConvertTo-Json -Depth 8"
+        )
+        monitor_result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", monitor_script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        monitor_payload = (monitor_result.stdout or "").strip()
+        if monitor_payload and monitor_payload != "[]":
+            monitors = json.loads(monitor_payload)
+            if isinstance(monitors, dict):
+                monitors = [monitors]
+            payload["monitors"] = [
+                {
+                    "name": item.get("Name") or "Unknown monitor",
+                    "status": item.get("Status") or "unknown",
+                    "type": item.get("MonitorType") or "unknown",
+                    "pnp_device_id": item.get("PNPDeviceID") or None,
+                    "screen_height": item.get("ScreenHeight"),
+                    "screen_width": item.get("ScreenWidth"),
+                }
+                for item in monitors
+            ]
+    except Exception:
+        pass
+
+    try:
+        video_script = (
+            "Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | "
+            "Select-Object Name, CurrentHorizontalResolution, CurrentVerticalResolution, CurrentRefreshRate, Status | "
+            "ConvertTo-Json -Depth 8"
+        )
+        video_result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", video_script],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        video_payload = (video_result.stdout or "").strip()
+        if video_payload and video_payload != "[]":
+            video_devices = json.loads(video_payload)
+            if isinstance(video_devices, dict):
+                video_devices = [video_devices]
+            payload["video_cards"] = [
+                {
+                    "name": item.get("Name") or "Display adapter",
+                    "resolution": f"{item.get('CurrentHorizontalResolution')}x{item.get('CurrentVerticalResolution')}",
+                    "refresh_rate": item.get("CurrentRefreshRate"),
+                    "status": item.get("Status") or "unknown",
+                }
+                for item in video_devices
+            ]
+    except Exception:
+        pass
+
+    payload["count"] = len(payload.get("monitors", []))
+    if payload["monitors"]:
+        payload["primary_monitor"] = payload["monitors"][0].get("name")
+    if not payload["monitors"] and not payload.get("video_cards"):
+        payload["limitation"] = "Windows did not expose monitor metadata in the current environment."
+
+    return payload
+
+
+def get_brightness() -> dict:
+    """Return brightness information for supported monitors, or a truthful limitation."""
+    info = {
+        "current": None,
+        "supported": False,
+        "limitation": None,
+    }
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        value = (result.stdout or "").strip()
+        if value:
+            info["current"] = int(value.splitlines()[-1].strip())
+            info["supported"] = True
+    except Exception:
+        pass
+    if info["current"] is None:
+        info["limitation"] = "The current monitor or driver does not expose brightness metadata through Windows WMI."
+    return info
 
 
 def get_drive_information() -> str:
