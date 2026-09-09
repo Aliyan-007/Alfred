@@ -14,7 +14,6 @@ START_MENU_PATHS = [
     Path(os.environ.get("PUBLIC", "")) / "Desktop",
 ]
 
-# Standard Windows Built-ins
 SYSTEM_APPS = {
     "notepad": "notepad.exe",
     "calculator": "calc.exe",
@@ -33,9 +32,11 @@ SYSTEM_APPS = {
     "device manager": "devmgmt.msc",
 }
 
+STOP_WORDS = {"on", "in", "at", "to", "for", "the", "a", "an", "app", "browser", "pc", "windows", "my"}
+
 
 # =========================================================
-# APPLICATION INDEXER
+# APPLICATION INDEXER CLASS
 # =========================================================
 
 class AppIndexer:
@@ -51,14 +52,13 @@ class AppIndexer:
         return name.strip()
 
     def build_index(self):
-        """Scan Start Menu and Desktop shortcuts."""
         self.app_index.clear()
 
-        # 1. Add System apps first
+        # 1. Add Windows system utilities
         for name, cmd in SYSTEM_APPS.items():
             self.app_index[name] = cmd
 
-        # 2. Scan shortcut directories
+        # 2. Add Start Menu and Desktop shortcuts
         for base_path in START_MENU_PATHS:
             if not base_path.exists():
                 continue
@@ -68,7 +68,6 @@ class AppIndexer:
                     if file.lower().endswith((".lnk", ".url")):
                         clean = self._clean_name(file)
                         full_path = Path(root) / file
-                        # Ignore uninstallers or help links
                         if any(w in clean for w in ["uninstall", "help", "documentation", "readme"]):
                             continue
                         self.app_index[clean] = str(full_path)
@@ -76,47 +75,57 @@ class AppIndexer:
         print(f"[INDEXER] Indexed {len(self.app_index)} applications and tools.")
 
     def find_app(self, query: str):
-        query = query.lower().strip()
+        query = re.sub(r"[^\w\s]", "", query.lower()).strip()
+        if not query:
+            return None, None
+
+        q_tokens = [w for w in query.split() if w not in STOP_WORDS]
+        if not q_tokens:
+            q_tokens = query.split()
+        cleaned_query = " ".join(q_tokens)
 
         # 1. Exact match
-        if query in self.app_index:
-            return self.app_index[query], query
+        if cleaned_query in self.app_index:
+            return self.app_index[cleaned_query], cleaned_query
 
-        # 2. Substring match
+        # 2. Word boundary match
         for name, target in self.app_index.items():
-            if query == name or query in name:
+            if re.search(r"\b" + re.escape(cleaned_query) + r"\b", name):
                 return target, name
 
-        # 3. Token match
-        q_words = set(query.split())
+        # 3. Meaningful token match
         best_match = None
         best_score = 0
+        q_set = set(q_tokens)
+
         for name, target in self.app_index.items():
-            n_words = set(name.split())
-            overlap = len(q_words.intersection(n_words))
-            if overlap > best_score:
-                best_score = overlap
+            n_tokens = [w for w in name.split() if w not in STOP_WORDS]
+            n_set = set(n_tokens)
+            overlap = q_set.intersection(n_set)
+
+            if len(overlap) > best_score and len(overlap) >= len(q_set):
+                best_score = len(overlap)
                 best_match = (target, name)
 
-        if best_match and best_score >= 1:
+        if best_match:
             return best_match
 
         return None, None
 
-    def launch(self, query: str) -> str:
+    def launch(self, query: str):
         target, matched_name = self.find_app(query)
         if not target:
-            return f"I couldn't find an installed application matching '{query}', Sir."
+            return False, None
 
         try:
             if target.startswith("ms-settings:"):
                 subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
             else:
                 os.startfile(target)
-            return f"Opened {matched_name.capitalize()}, Sir."
+            return True, f"Opened {matched_name.capitalize()}, Sir."
         except Exception as error:
-            return f"I found {matched_name}, but couldn't open it: {error}"
+            return False, f"I found {matched_name}, but couldn't open it: {error}"
 
 
 # Singleton instance
-indexer = AppIndexer()
+indexer = AppIndexer() 

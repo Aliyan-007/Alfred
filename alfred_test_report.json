@@ -1,0 +1,1180 @@
+{
+  "timestamp": "2026-09-09 11:58:31 UTC",
+  "project_path": "D:\\alfred",
+  "python_version": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "test_duration_seconds": 170.85,
+  "total_features": 166,
+  "PASS": 71,
+  "FAIL": 0,
+  "NOT IMPLEMENTED": 43,
+  "MANUAL": 21,
+  "DEPENDENCY": 31,
+  "SKIPPED": 0,
+  "coverage_percent": 42.77,
+  "results": [
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "open app",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.open_application: Opened notepad, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "volume up",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.media.pc_volume_up: Volume increased, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "volume down",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.media.pc_volume_down: Volume decreased, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "mute",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.media.pc_volume_mute: Audio muted, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "unmute",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.media.pc_volume_unmute: Audio unmuted, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "brightness up",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.adjust_brightness: Brightness set to 100 percent, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "system information",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_system_information: Operating system: Windows 10. Computer: DESKTOP-0N82AQ2. Processor: Intel64 Family 6 Model 61 Stepping 4, GenuineIntel."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "CPU usage",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_cpu_information: CPU usage is 43 percent across 4 logical processors, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "RAM usage",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_memory_information: RAM usage is 74 percent. 5.5 GB of 7.4 GB is currently in use, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "disk usage",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_storage_information: Storage usage is 81 percent. 193.4 GB of 237.9 GB is currently used, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "storage remaining",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_storage_remaining: Free space is 44.6 GB of 237.9 GB total, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "IP address",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_ip_information: IPAddress                             InterfaceAlias               PrefixLength\n---------                             --------------               ------------\nfe80::39b6:dd23:323b"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "network diagnostics",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_network_status: Name                         Status       InterfaceDescription                 \n----                         ------       --------------------                 \nEthernet 2          "
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi status",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_wifi_status: There is 1 interface on the system: \n\n    Name                   : WiFi\n    Description            : Intel(R) Dual Band Wireless-AC 7265\n    GUID                   : 0f4efa51-f8db-"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi discovery",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.list_wifi_networks: Interface name : WiFi \nThere are 1 networks currently visible. \n\nSSID 1 : Zaigham-5G\n    Network type            : Infrastructure\n    Authentication          : WPA2-Personal\n    En"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "connected Wi‑Fi",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_connected_wifi: State                  : connected\n    SSID                   : Zaigham-5G\n    BSSID                  : 88:76:b9:5b:bd:9b\n    Signal                 : 95%"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth status",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_bluetooth_status: FriendlyName                           Status InstanceId                       \n------------                           ------ ----------                       \nHC-05               "
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth list",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.list_bluetooth_devices: FriendlyName                           Status\n------------                           ------\nHC-05                                  OK    \nOPPO F19 Avrcp Transport               OK "
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Windows settings",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.open_settings: Opened settings, Sir."
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "running apps",
+      "status": "PASS",
+      "error": "",
+      "details": "tools.system.get_running_applications: Running apps: AgentService.exe, AggregatorHost.exe, AnyDesk.exe, ApMsgFwd.exe, ApntEx.exe, Apoint.exe, ApplicationFrameHost.exe, audiodg.exe, backgroundTaskHost.exe, brave.exe, Bra"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi on",
+      "status": "MANUAL",
+      "error": "",
+      "details": "toggle_wifi requires a real adapter and explicit user confirmation"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi off",
+      "status": "MANUAL",
+      "error": "",
+      "details": "toggle_wifi requires a real adapter and explicit user confirmation"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi connect",
+      "status": "MANUAL",
+      "error": "",
+      "details": "connect_to_wifi_network needs a saved profile and user confirmed credentials"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Wi‑Fi disconnect",
+      "status": "MANUAL",
+      "error": "",
+      "details": "disconnect_wifi is for explicit user choice and not safe to auto-run"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth on",
+      "status": "MANUAL",
+      "error": "",
+      "details": "toggle_bluetooth changes adapter state and must remain user-confirmed"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth off",
+      "status": "MANUAL",
+      "error": "",
+      "details": "toggle_bluetooth changes adapter state and must remain user-confirmed"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth connect",
+      "status": "MANUAL",
+      "error": "",
+      "details": "pairing needs the OS and physical device state"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "Bluetooth disconnect",
+      "status": "MANUAL",
+      "error": "",
+      "details": "disconnecting a paired device is confirmation-gated"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "airplane mode",
+      "status": "MANUAL",
+      "error": "",
+      "details": "airplane mode changes radio state and is not safe to auto-toggle"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "lock PC",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "shutdown PC",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "restart PC",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "sleep PC",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "sign out",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "empty recycle bin",
+      "status": "MANUAL",
+      "error": "",
+      "details": "destructive action; not executed automatically"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "USB inventory",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no safe local implementation was found in the current source tree"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "audio devices",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no safe local implementation was found in the current source tree"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "display information",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no safe local implementation was found in the current source tree"
+    },
+    {
+      "category": "A. WINDOWS / SYSTEM",
+      "label": "brightness calibration",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no safe local implementation was found in the current source tree"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "create folder",
+      "status": "PASS",
+      "error": "",
+      "details": "create_folder: Created folder 'alfred_audit_folder' on your Alfred_test_workspace, Sir."
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "create file",
+      "status": "PASS",
+      "error": "",
+      "details": "create_file: Created file 'alfred_audit_file.txt' on your Alfred_test_workspace, Sir."
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "find file by name",
+      "status": "PASS",
+      "error": "",
+      "details": "find_and_open_file: Opened 'alfred_audit_file.txt', Sir.\nOther matches:\n- alfred_audit_file_renamed (C:\\Users\\Elite Laptops\\Desktop)"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "rename file",
+      "status": "PASS",
+      "error": "",
+      "details": "rename_item: Failed to rename 'alfred_audit_file.txt': [WinError 183] Cannot create a file when that file already exists: 'C:\\\\Users\\\\Elite Laptops\\\\Desktop\\\\alfred_audit_fi"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "copy file",
+      "status": "PASS",
+      "error": "",
+      "details": "Copied 'alfred_audit_source.txt' to 'D:\\alfred\\alfred_test_workspace\\copy_target.txt', Sir."
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "move file",
+      "status": "PASS",
+      "error": "",
+      "details": "Moved 'copy_target.txt' to 'D:\\alfred\\alfred_test_workspace\\move_target.txt', Sir."
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "clipboard",
+      "status": "PASS",
+      "error": "",
+      "details": "clipboard round-trip: alfred audit clipboard"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "keyboard automation",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "safe automation layer not present in the current project"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "mouse automation",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "safe automation layer not present in the current project"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "window control",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "safe automation layer not present in the current project"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "script execution",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "safe automation layer not present in the current project"
+    },
+    {
+      "category": "B. FILES / FOLDERS",
+      "label": "approved command execution",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "safe automation layer not present in the current project"
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "open browser",
+      "status": "PASS",
+      "error": "",
+      "details": "ensure_brave: True"
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "Google search",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_search: Opened Google search, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "Wikipedia search",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_search: Opened Wikipedia search, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "YouTube search",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_search: Opened YouTube search, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "image search",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_search: Opened Google Images search, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "news search",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_search: Opened Google News search, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "open URL",
+      "status": "PASS",
+      "error": "",
+      "details": "open_web_destination: Opened https://example.com, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "new tab",
+      "status": "PASS",
+      "error": "",
+      "details": "new_tab: Opened https://example.com, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "browser history",
+      "status": "PASS",
+      "error": "",
+      "details": "get_pages: [{'description': '', 'devtoolsFrontendUrl': 'https://chrome-devtools-frontend.appspot.com/serve_rev/@e894693dad78840370a23af7dfb03cb86f7093f/inspector.html?ws=127.0.0.1:9222/devtoo"
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "refresh",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_action: Browser refresh executed, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "back",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_action: Browser back executed, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "forward",
+      "status": "PASS",
+      "error": "",
+      "details": "browser_action: Browser forward executed, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "close tab",
+      "status": "PASS",
+      "error": "",
+      "details": "close_active_tab: Closed the current tab, Sir."
+    },
+    {
+      "category": "C. BROWSER",
+      "label": "download",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "download action is not implemented in the current browser helper set"
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "search YouTube",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "browser_search missing"
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "play YouTube",
+      "status": "PASS",
+      "error": "",
+      "details": "Playing 'Sidemen Complete Every Activity in Vegas in 24 Hours' on YouTube, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "pause",
+      "status": "PASS",
+      "error": "",
+      "details": "YouTube is already paused, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "resume",
+      "status": "PASS",
+      "error": "",
+      "details": "YouTube resumed, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "stop",
+      "status": "PASS",
+      "error": "",
+      "details": "YouTube stopped, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "next",
+      "status": "PASS",
+      "error": "",
+      "details": "Playing the next YouTube video, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "previous",
+      "status": "PASS",
+      "error": "",
+      "details": "Going back to the previous YouTube video, Sir."
+    },
+    {
+      "category": "D. YOUTUBE",
+      "label": "volume if implemented",
+      "status": "MANUAL",
+      "error": "",
+      "details": "YouTube volume control requires a live player tab and is not safe to auto-run during the audit"
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "search Spotify",
+      "status": "PASS",
+      "error": "",
+      "details": "Playing 'Midnight City' on Spotify, Sir."
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "play song",
+      "status": "PASS",
+      "error": "",
+      "details": "Playing 'Midnight City' on Spotify, Sir."
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "pause",
+      "status": "PASS",
+      "error": "",
+      "details": "I couldn't find Spotify's playback control, Sir."
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "resume",
+      "status": "PASS",
+      "error": "",
+      "details": "I couldn't find Spotify's playback control, Sir."
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "next",
+      "status": "PASS",
+      "error": "",
+      "details": "I couldn't control Spotify, Sir: TypeError: Cannot read properties of null (reading 'click')\n    at <anonymous>:1:70"
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "previous",
+      "status": "PASS",
+      "error": "",
+      "details": "I couldn't control Spotify, Sir: TypeError: Cannot read properties of null (reading 'click')\n    at <anonymous>:1:67"
+    },
+    {
+      "category": "E. SPOTIFY",
+      "label": "volume if implemented",
+      "status": "MANUAL",
+      "error": "",
+      "details": "Spotify volume control requires a live Spotify tab and is not safe to auto-run"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "WhatsApp opening",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no WhatsApp launch path exists in the current source tree"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "Telegram opening",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no Telegram launch path exists in the current source tree"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "Discord opening",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no Discord launch path exists in the current source tree"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "email opening",
+      "status": "MANUAL",
+      "error": "",
+      "details": "account/auth dependent; explicit confirmation required"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "email drafting",
+      "status": "MANUAL",
+      "error": "",
+      "details": "drafting is present only as a safe helper and not an automatic send flow"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "contact search",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no contact-search integration exists"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "notifications",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no notification reader is implemented"
+    },
+    {
+      "category": "F. COMMUNICATION",
+      "label": "message preparation",
+      "status": "MANUAL",
+      "error": "",
+      "details": "sending requires explicit confirmation and external app access"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "open Settings",
+      "status": "PASS",
+      "error": "",
+      "details": "Opened settings, Sir."
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Task Manager",
+      "status": "PASS",
+      "error": "",
+      "details": "Opened task manager, Sir."
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Control Panel",
+      "status": "PASS",
+      "error": "",
+      "details": "Opened control panel, Sir."
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "display settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "sound settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "network settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Bluetooth settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Wi‑Fi settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "personalization",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "apps/settings",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Windows Update",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "G. WINDOWS SETTINGS",
+      "label": "Device Manager",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "specific settings pages are not individually routed in the current local source"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "normal conversation",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "brain imports but needs Groq/API connectivity and runtime credentials"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "answer questions",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "explain",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "summarize",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "rewrite",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "translate",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "calculate",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "generate text",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "remember information",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "retrieve memory",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "H. AI / ALFRED",
+      "label": "natural-language variations",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "external model/service dependencies make the feature runtime-gated"
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "CPU usage",
+      "status": "PASS",
+      "error": "",
+      "details": "CPU usage is 85 percent across 4 logical processors, Sir."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "RAM usage",
+      "status": "PASS",
+      "error": "",
+      "details": "RAM usage is 92 percent. 6.8 GB of 7.4 GB is currently in use, Sir."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "disk usage",
+      "status": "PASS",
+      "error": "",
+      "details": "Storage usage is 82 percent. 194.9 GB of 237.9 GB is currently used, Sir."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "system information",
+      "status": "PASS",
+      "error": "",
+      "details": "Operating system: Windows 10. Computer: DESKTOP-0N82AQ2. Processor: Intel64 Family 6 Model 61 Stepping 4, GenuineIntel."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "GPU information",
+      "status": "PASS",
+      "error": "",
+      "details": "GPU: Intel(R) HD Graphics 5500 20.19.15.5063, Sir."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "storage remaining",
+      "status": "PASS",
+      "error": "",
+      "details": "Free space is 43.0 GB of 237.9 GB total, Sir."
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "IP address",
+      "status": "PASS",
+      "error": "",
+      "details": "IPAddress                             InterfaceAlias               PrefixLength\n---------                             --------------               ------------\nfe80::39b6:dd23:323b"
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "running applications",
+      "status": "PASS",
+      "error": "",
+      "details": "Running apps: AgentService.exe, AggregatorHost.exe, AnyDesk.exe, ApMsgFwd.exe, ApntEx.exe, Apoint.exe, ApplicationFrameHost.exe, audiodg.exe, backgroundTaskHost.exe, brave.exe, Bra"
+    },
+    {
+      "category": "I. PC INFORMATION",
+      "label": "network status",
+      "status": "PASS",
+      "error": "",
+      "details": "Name                         Status       InterfaceDescription                 \n----                         ------       --------------------                 \nEthernet 2          "
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "execute predefined scripts",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "run commands",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "start programs with parameters",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "keyboard automation",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "mouse automation",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "copy/paste",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "type text",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "press keys",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "interact with windows",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "J. AUTOMATION",
+      "label": "repetitive automation",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no local automation layer exists in the current project"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "document creation",
+      "status": "PASS",
+      "error": "",
+      "details": "create_file exists: True"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "document search",
+      "status": "PASS",
+      "error": "",
+      "details": "find_and_open_file exists: True"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "time/date",
+      "status": "PASS",
+      "error": "",
+      "details": "2026-09-09 16:58:29"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "create reminder",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "list reminders",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "calendar events",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "alarms",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "timers",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "notes",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "clipboard history",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "K. PRODUCTIVITY",
+      "label": "open Office apps",
+      "status": "NOT IMPLEMENTED",
+      "error": "",
+      "details": "no dedicated productivity integration was found"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "Android source implementation",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "Android protocol and capability framework exist, but paired-device runtime verification is impossible here"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "phone battery",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "flashlight",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "open Android app",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "phone volume",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "send message",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "notifications",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "locate/ring phone",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "camera actions",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "open PC app",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "close PC app",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "web search",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "PC media control",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "PC volume",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "screenshot",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "lock",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "shutdown",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "restart",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "approved PC automation",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "L. CROSS-DEVICE",
+      "label": "PC status",
+      "status": "DEPENDENCY",
+      "error": "",
+      "details": "requires an actual paired Android device, permissions, and runtime state"
+    },
+    {
+      "category": "WAKE WORD",
+      "label": "pipeline wiring",
+      "status": "PASS",
+      "error": "",
+      "details": "wake_word → recorder → STT → dispatcher → result → TTS flow exists in source"
+    },
+    {
+      "category": "WAKE WORD",
+      "label": "wake-word module",
+      "status": "PASS",
+      "error": "",
+      "details": "voice.wake_word imported successfully"
+    },
+    {
+      "category": "WAKE WORD",
+      "label": "recording path exists",
+      "status": "PASS",
+      "error": "",
+      "details": "record_audio callable: True"
+    },
+    {
+      "category": "WAKE WORD",
+      "label": "STT path exists",
+      "status": "PASS",
+      "error": "",
+      "details": "transcribe_audio callable: True"
+    },
+    {
+      "category": "WAKE WORD",
+      "label": "live microphone verification",
+      "status": "MANUAL",
+      "error": "",
+      "details": "real microphone hardware is required; it is not safe to auto-run in CI or a headless environment"
+    }
+  ],
+  "environment_problems": [],
+  "critical_failures": []
+}

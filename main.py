@@ -1,4 +1,5 @@
 import os
+import sys
 import time
 from pathlib import Path
 
@@ -11,16 +12,50 @@ from tools.dispatcher import handle_command
 from voice.recorder import record_audio
 from voice.stt import transcribe_audio
 from voice.tts import initialize_tts, speak
-from voice.wake_word import wait_for_wake_word
+from voice.wake_word import wait_for_wake_word, set_speaking
 
 
 # =========================================================
-# CONFIGURATION
+# WAKE WORD CONFIGURATION
 # =========================================================
 
-# If you have custom alfred.onnx in root or models folder:
-# WAKE_WORD_MODEL = "models/alfred.onnx" if Path("models/alfred.onnx").exists() else "alexa_v0.1"
-WAKE_WORD_MODEL = "alexa_v0.1"
+BASE_DIR = Path(__file__).resolve().parent
+
+CANDIDATE_PATHS = [
+    BASE_DIR / "alfred.onnx",
+    BASE_DIR / "models" / "alfred.onnx",
+    BASE_DIR / "voice" / "alfred.onnx",
+    Path("D:/alfred/alfred.onnx"),
+]
+
+WAKE_WORD_MODEL = None
+for candidate in CANDIDATE_PATHS:
+    if candidate.exists():
+        WAKE_WORD_MODEL = str(candidate)
+        break
+
+if not WAKE_WORD_MODEL:
+    print("\n[WARNING] 'alfred.onnx' not found! Falling back to alexa_v0.1")
+    WAKE_WORD_MODEL = "alexa_v0.1"
+else:
+    print(f"\n[WAKE WORD] Custom model loaded: {WAKE_WORD_MODEL}")
+
+
+# =========================================================
+# HELPER: SAFE SPEAK
+# =========================================================
+
+def safe_speak(text: str, assistant: str = "ALFRED"):
+    """Block wake-word detection while Alfred speaks (kills echo bleed)."""
+    try:
+        set_speaking(True)
+        speak(text, assistant)
+    except Exception as error:
+        print(f"[TTS Error] {error}")
+    finally:
+        # Extra echo tail to let audio drivers flush
+        time.sleep(0.5)
+        set_speaking(False)
 
 
 # =========================================================
@@ -32,64 +67,36 @@ print("=" * 55)
 print("                    ALFRED")
 print("=" * 55)
 print()
-print("Shared AI system online.")
-print()
-print("English  -> ALFRED")
-print("Urdu     -> F.R.I.D.A.Y.")
-print()
 
-
-# =========================================================
-# BRAVE BROWSER (CDP)
-# =========================================================
-
+# Initialize all subsystems
 print("Starting ALFRED Brave browser...")
 try:
-    if ensure_brave():
-        print("ALFRED Brave browser is ready.")
-    else:
-        print("WARNING: Brave browser could not be started.")
-except Exception as error:
-    print(f"Brave startup error: {error}")
-
-print()
-
-
-# =========================================================
-# TTS INITIALIZATION
-# =========================================================
+    ensure_brave()
+except Exception:
+    pass
 
 print("Initializing voice system...")
 try:
     initialize_tts(wait=False)
-    print("Voice system initialized.")
-except Exception as error:
-    print(f"Voice initialization failed: {error}")
-
-print()
-
-
-# =========================================================
-# WAKE WORD ENGINE
-# =========================================================
+except Exception:
+    pass
 
 print("Loading wake-word engine...")
 try:
-    wake_model = Model(wakeword_models=[WAKE_WORD_MODEL])
-except Exception as error:
-    print(f"Wake-word engine error: {error}")
-    raise SystemExit(1)
+    wake_model = Model(wakeword_models=[WAKE_WORD_MODEL], inference_framework="onnx")
+except Exception:
+    try:
+        wake_model = Model(wakeword_models=[WAKE_WORD_MODEL])
+    except Exception as err:
+        print(f"Failed loading wake word: {err}")
+        raise SystemExit(1)
 
-print("Wake-word engine ready.")
-print()
-print("ALFRED is ready.")
-print(f"Wake phrase active ({WAKE_WORD_MODEL}).")
-print("Say 'exit' or 'shutdown alfred' to stop.")
-print()
+print("\nALFRED systems ready and online.")
+print("Say 'shutdown alfred' to exit.\n")
 
 
 # =========================================================
-# PROCESS ONE COMMAND
+# COMMAND PROCESSOR
 # =========================================================
 
 def process_command():
@@ -97,122 +104,87 @@ def process_command():
 
     audio_file = record_audio()
     if not audio_file:
-        print("No audio was recorded.")
         return
 
     user_input = transcribe_audio(audio_file)
-    if not user_input:
-        print("I didn't catch that.")
+    if not user_input or not user_input.strip():
         return
 
     print()
     print(f"You: {user_input}")
     print()
 
-    normalized_input = user_input.lower().strip()
+    normalized_input = user_input.lower().strip().rstrip(".?!")
 
-    # =====================================================
-    # 1. ASSISTANT EXIT / CLOSE APPLICATION
-    # =====================================================
-    if normalized_input in {
-        "exit",
-        "bye",
-        "goodbye",
-        "good bye",
-        "quit",
+    # Discard mic artifacts
+    if normalized_input in {"you", "thank you", "thanks", "subtitles by", "bye", "go", "yeah", "yes"}:
+        print("[ALFRED] Discarded brief mic artifact.")
+        return
+
+    # Program shutdown. Require an explicit shutdown phrase so ordinary
+    # microphone noise or casual speech does not terminate the assistant.
+    shutdown_phrases = {
         "shutdown alfred",
-        "close alfred",
         "exit alfred",
-    }:
+        "close alfred",
+        "quit alfred",
+        "alfred shutdown",
+    }
+    if (
+        normalized_input in shutdown_phrases
+        or normalized_input.endswith(" shutdown alfred")
+        or normalized_input.startswith("shutdown alfred ")
+    ):
         print("ALFRED: Goodbye, Sir.")
-        try:
-            speak("Goodbye, Sir.", "ALFRED")
-        except Exception:
-            pass
+        safe_speak("Goodbye, Sir.", "ALFRED")
         raise SystemExit
 
-    # =====================================================
-    # 2. RETURN TO SLEEP / WAKE-WORD STANDBY
-    # =====================================================
-    if normalized_input in {
-        "stop listening",
-        "go to sleep",
-        "go back to sleep",
-        "stand down",
-        "cancel",
-    }:
-        print("ALFRED: Returning to wake-word listening, Sir.")
-        try:
-            speak("Returning to wake-word listening, Sir.", "ALFRED")
-        except Exception:
-            pass
+    # Standby
+    if normalized_input in {"stop listening", "go to sleep", "stand down"}:
+        print("ALFRED: Standing down. Call me when you need me, Sir.")
+        safe_speak("Standing down. Call me when you need me, Sir.", "ALFRED")
         return
 
-    # =====================================================
-    # 3. ASSISTANT ROUTER (Language / Persona)
-    # =====================================================
+    # Persona
     try:
         assistant = detect_assistant(user_input)
-    except Exception as error:
-        print(f"Assistant router error: {error}")
+    except Exception:
         assistant = "ALFRED"
 
-    # =====================================================
-    # 4. DETERMINISTIC DISPATCHER FIRST
-    # =====================================================
+    # Dispatcher
     try:
         tool_result = handle_command(user_input)
-
         if tool_result is not None:
-            answer = tool_result
+            if isinstance(tool_result, tuple):
+                answer = str(tool_result[1]) if len(tool_result) > 1 and tool_result[1] else str(tool_result[0])
+            else:
+                answer = str(tool_result)
         else:
-            # 5. AI Brain Fallback
-            answer = ask_brain(user_input)
-
+            answer = str(ask_brain(user_input))
     except Exception as error:
-        print(f"Processing error: {error}")
-        return
+        answer = f"I encountered an error, Sir: {error}"
 
-    # =====================================================
-    # 6. RESPONSE / TTS
-    # =====================================================
     print(f"{assistant}: {answer}")
     print()
-
-    try:
-        speak(answer, assistant)
-    except Exception as error:
-        print(f"TTS error: {error}")
-
-    print()
+    safe_speak(answer, assistant)
 
 
 # =========================================================
-# PERMANENT WAKE LOOP
+# MAIN LOOP
 # =========================================================
 
 while True:
     try:
-        time.sleep(1.0)
         wait_for_wake_word(wake_model)
         process_command()
-
-        print()
-        print("ALFRED is ready.")
-        print()
+        time.sleep(1.0)
 
     except SystemExit:
-        print()
-        print("ALFRED: Shutdown complete.")
+        print("\nALFRED: Shutdown complete.")
         break
-
     except KeyboardInterrupt:
-        print()
-        print("ALFRED: Goodbye, Sir.")
+        print("\nALFRED: Goodbye, Sir.")
         break
-
     except Exception as error:
-        print()
-        print(f"System error: {error}")
-        print()
-        time.sleep(1)
+        print(f"\nSystem error: {error}\n")
+        time.sleep(1.0)

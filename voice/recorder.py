@@ -1,272 +1,126 @@
+from collections import deque
 import time
-
 import numpy as np
 import sounddevice as sd
 import soundfile as sf
-
+from voice.wake_word import find_microphone
 
 SAMPLE_RATE = 16000
 CHANNELS = 1
 
-ENERGY_THRESHOLD = 0.015
-SILENCE_DURATION = 0.75
-MAX_RECORDING_SECONDS = 30
-START_TIMEOUT = 8
+SILENCE_DURATION = 1.3
+MIN_SPEECH_DURATION = 0.4
+MAX_RECORDING_SECONDS = 12.0
+START_TIMEOUT = 6.0
+PRE_BUFFER_DURATION = 0.4
 
-
-# =========================================================
-# MICROPHONE DETECTION
-# =========================================================
-
-def find_microphone():
-
-    devices = sd.query_devices()
-
-    candidates = []
-
-    for index, device in enumerate(devices):
-
-        if device["max_input_channels"] > 0:
-
-            candidates.append(
-                (
-                    index,
-                    device["name"],
-                )
-            )
-
-    if not candidates:
-
-        raise RuntimeError(
-            "No microphone device found."
-        )
-
-    # Prefer headset / hands-free microphones.
-    preferred_words = [
-        "hands-free",
-        "headset",
-        "microphone",
-        "mic",
-    ]
-
-    for word in preferred_words:
-
-        for index, name in candidates:
-
-            if word in name.lower():
-
-                print(
-                    f"Using microphone [{index}]: {name}",
-                    flush=True,
-                )
-
-                return index
-
-    # Try Windows default input.
-    default_input = sd.default.device[0]
-
-    if (
-        default_input is not None
-        and default_input >= 0
-        and default_input < len(devices)
-    ):
-
-        print(
-            f"Using default microphone "
-            f"[{default_input}]: "
-            f"{devices[default_input]['name']}",
-            flush=True,
-        )
-
-        return default_input
-
-    # Final fallback.
-    index, name = candidates[0]
-
-    print(
-        f"Using available microphone "
-        f"[{index}]: {name}",
-        flush=True,
-    )
-
-    return index
-
-
-# =========================================================
-# AUDIO LEVEL
-# =========================================================
 
 def get_rms(audio):
-
-    return float(
-        np.sqrt(
-            np.mean(
-                np.square(audio)
-            )
-        )
-    )
+    if len(audio) == 0:
+        return 0.0
+    return float(np.sqrt(np.mean(np.square(audio))))
 
 
-# =========================================================
-# RECORD AUDIO
-# =========================================================
-
-def record_audio(
-    output_file="voice_input.wav",
-):
-
+def record_audio(output_file="voice_input.wav"):
+    time.sleep(0.15)
     microphone = find_microphone()
 
-    print()
-    print(
-        "Listening...",
-        flush=True,
-    )
+    print("\nListening for command...", flush=True)
 
     chunk_duration = 0.05
+    chunk_size = int(SAMPLE_RATE * chunk_duration)
 
-    chunk_size = int(
-        SAMPLE_RATE * chunk_duration
-    )
+    pre_buffer_chunks = int(PRE_BUFFER_DURATION / chunk_duration)
+    pre_buffer = deque(maxlen=pre_buffer_chunks)
 
     recorded_chunks = []
-
     speech_started = False
+    speech_start_time = 0.0
     silence_time = 0.0
     waiting_time = 0.0
     total_time = 0.0
 
-    with sd.InputStream(
-        device=microphone,
-        samplerate=SAMPLE_RATE,
-        channels=CHANNELS,
-        dtype="float32",
-        blocksize=chunk_size,
-    ) as stream:
+    try:
+        with sd.InputStream(
+            device=microphone,
+            samplerate=SAMPLE_RATE,
+            channels=CHANNELS,
+            dtype="float32",
+            blocksize=chunk_size,
+        ) as stream:
 
-        while True:
+            # -------------------------------------------------------------
+            # ADAPTIVE CALIBRATION: Measure ambient room noise for 0.25s
+            # -------------------------------------------------------------
+            noise_samples = []
+            for _ in range(5):
+                chk, _ = stream.read(chunk_size)
+                noise_samples.append(get_rms(chk))
+            ambient_floor = float(np.mean(noise_samples)) if noise_samples else 0.003
+            
+            # Dynamic trigger: 1.6x ambient floor, bounded between 0.004 and 0.025
+            energy_trigger = max(0.004, min(0.025, ambient_floor * 1.6))
+            print(f"[MIC] Ambient noise: {ambient_floor:.4f} | Dynamic trigger: {energy_trigger:.4f}", flush=True)
 
-            audio_chunk, overflowed = stream.read(
-                chunk_size
-            )
+            while True:
+                audio_chunk, _ = stream.read(chunk_size)
+                audio_chunk = audio_chunk.copy()
+                volume = get_rms(audio_chunk)
+                total_time += chunk_duration
 
-            if overflowed:
+                if not speech_started:
+                    pre_buffer.append(audio_chunk)
+                    waiting_time += chunk_duration
 
-                print(
-                    "Warning: microphone buffer overflow.",
-                    flush=True,
-                )
+                    # Live mic level bar
+                    bar = "#" * int(min(30, volume * 500))
+                    print(f"\r[MIC] Level: {volume:.4f} [{bar:<30}]", end="", flush=True)
 
-            audio_chunk = audio_chunk.copy()
+                    if volume >= energy_trigger:
+                        print(f"\n[RECORDER] Speech detected! (Volume: {volume:.4f})", flush=True)
+                        speech_started = True
+                        speech_start_time = time.time()
+                        recorded_chunks.extend(list(pre_buffer))
+                        pre_buffer.clear()
+                        silence_time = 0.0
 
-            volume = get_rms(
-                audio_chunk
-            )
+                    elif waiting_time >= START_TIMEOUT:
+                        print("\n[RECORDER] No speech detected (timed out).", flush=True)
+                        return None
+                    continue
 
-            total_time += chunk_duration
+                # ---------------------------------------------------------
+                # Actively recording speech
+                # ---------------------------------------------------------
+                recorded_chunks.append(audio_chunk)
 
-            # Debug volume display
-            if volume > 0.003:
-
-                print(
-                    f"Mic level: {volume:.4f}",
-                    flush=True,
-                )
-
-            # --------------------------------------------
-            # WAIT FOR USER TO START SPEAKING
-            # --------------------------------------------
-
-            if not speech_started:
-
-                waiting_time += chunk_duration
-
-                if volume >= ENERGY_THRESHOLD:
-
-                    print(
-                        "Speech detected.",
-                        flush=True,
-                    )
-
-                    speech_started = True
-
-                    recorded_chunks.append(
-                        audio_chunk
-                    )
-
+                if volume < energy_trigger:
+                    silence_time += chunk_duration
+                else:
                     silence_time = 0.0
 
-                elif waiting_time >= START_TIMEOUT:
+                if silence_time >= SILENCE_DURATION:
+                    if (time.time() - speech_start_time) < MIN_SPEECH_DURATION:
+                        speech_started = False
+                        recorded_chunks.clear()
+                        silence_time = 0.0
+                        continue
+                    break
 
-                    print(
-                        "No speech detected.",
-                        flush=True,
-                    )
+                if total_time >= MAX_RECORDING_SECONDS:
+                    print("\n[RECORDER] Max duration reached.", flush=True)
+                    break
 
-                    return None
-
-                continue
-
-            # --------------------------------------------
-            # RECORD SPEECH
-            # --------------------------------------------
-
-            recorded_chunks.append(
-                audio_chunk
-            )
-
-            if volume < ENERGY_THRESHOLD:
-
-                silence_time += chunk_duration
-
-            else:
-
-                silence_time = 0.0
-
-            # --------------------------------------------
-            # USER STOPPED SPEAKING
-            # --------------------------------------------
-
-            if silence_time >= SILENCE_DURATION:
-
-                break
-
-            # --------------------------------------------
-            # MAXIMUM RECORDING LIMIT
-            # --------------------------------------------
-
-            if total_time >= MAX_RECORDING_SECONDS:
-
-                print(
-                    "Maximum recording time reached.",
-                    flush=True,
-                )
-
-                break
-
-    if not recorded_chunks:
-
-        print(
-            "No audio recorded.",
-            flush=True,
-        )
-
+    except Exception as error:
+        print(f"\n[RECORDER ERROR]: {error}", flush=True)
         return None
 
-    audio = np.concatenate(
-        recorded_chunks,
-        axis=0,
-    )
+    if not recorded_chunks:
+        return None
 
-    sf.write(
-        output_file,
-        audio,
-        SAMPLE_RATE,
-    )
+    audio = np.concatenate(recorded_chunks, axis=0)
+    sf.write(output_file, audio, SAMPLE_RATE)
+    print("[RECORDER] Recording complete.", flush=True)
 
-    print(
-        "Recording complete.",
-        flush=True,
-    )
-
+    time.sleep(0.1)
     return output_file

@@ -1,325 +1,1311 @@
-import ctypes
-from ctypes import wintypes
 import os
-import platform
-import re
-import socket
+import shutil
 import subprocess
 import time
-from datetime import datetime
 from pathlib import Path
 
-from tools.app_indexer import indexer
-
-# Win32 Constants for Clipboard
-CF_UNICODETEXT = 13
-GHND = 0x0042
+try:
+    import psutil
+except Exception:  # pragma: no cover
+    psutil = None
 
 
 # =========================================================
-# APPLICATION CONTROL (DYNAMIC)
+# APPLICATIONS
+# =========================================================
+
+APPLICATIONS = {
+    "notepad": ["notepad.exe"],
+    "calculator": ["calc.exe"],
+    "calc": ["calc.exe"],
+
+    "file explorer": ["explorer.exe"],
+    "explorer": ["explorer.exe"],
+
+    "chrome": [
+        "cmd",
+        "/c",
+        "start",
+        "",
+        "chrome",
+    ],
+
+    "brave": [
+        r"C:\Program Files\BraveSoftware\Brave-Browser\Application\brave.exe"
+    ],
+
+    "edge": [
+        "cmd",
+        "/c",
+        "start",
+        "",
+        "msedge",
+    ],
+
+    "vscode": ["code"],
+    "vs code": ["code"],
+
+    "visual studio code": ["code"],
+
+    "task manager": [
+        "taskmgr.exe"
+    ],
+
+    "control panel": [
+        "control.exe"
+    ],
+
+    "settings": [
+        "cmd",
+        "/c",
+        "start",
+        "",
+        "ms-settings:"
+    ],
+
+    "command prompt": [
+        "cmd.exe"
+    ],
+
+    "cmd": [
+        "cmd.exe"
+    ],
+
+    "powershell": [
+        "powershell.exe"
+    ],
+
+    "terminal": [
+        "wt.exe"
+    ],
+}
+
+
+# =========================================================
+# NORMALIZE
+# =========================================================
+
+def normalize_text(text: str) -> str:
+    return (
+        text
+        .lower()
+        .strip()
+    )
+
+
+# =========================================================
+# OPEN APPLICATION
 # =========================================================
 
 def open_application(application: str) -> str:
-    return indexer.launch(application)
+
+    application = normalize_text(
+        application
+    )
+
+    command = APPLICATIONS.get(
+        application
+    )
+
+    if command is None:
+        return (
+            f"I don't have permission to open "
+            f"'{application}', Sir."
+        )
+
+    try:
+
+        subprocess.Popen(
+            command,
+            shell=False,
+        )
+
+        return (
+            f"Opened {application}, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't open {application}, Sir. "
+            f"{error}"
+        )
 
 
 # =========================================================
-# WINDOW MANAGEMENT (WIN32)
+# FIND WINDOW
 # =========================================================
 
 def _get_windows():
+
     try:
+
+        import ctypes
+        from ctypes import wintypes
+
         user32 = ctypes.windll.user32
+
         windows = []
 
         EnumWindowsProc = ctypes.WINFUNCTYPE(
-            ctypes.c_bool, wintypes.HWND, wintypes.LPARAM
+            ctypes.c_bool,
+            wintypes.HWND,
+            wintypes.LPARAM,
         )
 
         def callback(hwnd, _):
+
             if not user32.IsWindowVisible(hwnd):
                 return True
-            length = user32.GetWindowTextLengthW(hwnd)
+
+            length = user32.GetWindowTextLengthW(
+                hwnd
+            )
+
             if length <= 0:
                 return True
-            buffer = ctypes.create_unicode_buffer(length + 1)
-            user32.GetWindowTextW(hwnd, buffer, length + 1)
+
+            buffer = ctypes.create_unicode_buffer(
+                length + 1
+            )
+
+            user32.GetWindowTextW(
+                hwnd,
+                buffer,
+                length + 1,
+            )
+
             title = buffer.value.strip()
+
             if title:
-                windows.append((hwnd, title))
+                windows.append(
+                    (hwnd, title)
+                )
+
             return True
 
-        user32.EnumWindows(EnumWindowsProc(callback), 0)
+        user32.EnumWindows(
+            EnumWindowsProc(callback),
+            0,
+        )
+
         return windows
+
     except Exception:
         return []
 
 
-def find_window(application: str):
-    wanted = application.lower().strip()
+# =========================================================
+# FIND WINDOW BY NAME
+# =========================================================
+
+def find_window(
+    application: str,
+):
+
+    wanted = normalize_text(
+        application
+    )
+
     for hwnd, title in _get_windows():
-        if wanted in title.lower():
+
+        if wanted in normalize_text(title):
             return hwnd
+
     return None
 
 
-def activate_application(application: str) -> str:
-    hwnd = find_window(application)
+# =========================================================
+# ACTIVATE APPLICATION
+# =========================================================
+
+def activate_application(
+    application: str,
+) -> str:
+
+    hwnd = find_window(
+        application
+    )
+
     if hwnd is None:
-        return f"I couldn't find an active window for '{application}', Sir."
+        return (
+            f"I couldn't find an open window for "
+            f"{application}, Sir."
+        )
+
     try:
-        ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        return f"Switched to {application}, Sir."
+
+        import ctypes
+
+        ctypes.windll.user32.ShowWindow(
+            hwnd,
+            9,  # SW_RESTORE
+        )
+
+        ctypes.windll.user32.SetForegroundWindow(
+            hwnd
+        )
+
+        return (
+            f"Switched to {application}, Sir."
+        )
+
     except Exception as error:
-        return f"I couldn't switch to {application}: {error}"
+
+        return (
+            f"I couldn't switch to {application}, Sir. "
+            f"{error}"
+        )
 
 
-def close_application(application: str) -> str:
-    hwnd = find_window(application)
-    if hwnd is None:
-        return f"I couldn't find an open window for '{application}', Sir."
+def restart_application(application: str) -> str:
+    """Restart a known application by closing it and reopening it."""
+    app = normalize_text(application)
+    if not app:
+        return "Which application should I restart, Sir?"
+
+    command = APPLICATIONS.get(app)
+    if command is None:
+        return f"I don't have permission to restart '{application}', Sir."
+
     try:
-        WM_CLOSE = 0x0010
-        ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
-        return f"Closed {application}, Sir."
+        hwnd = find_window(application)
+        if hwnd is not None:
+            import ctypes
+            WM_CLOSE = 0x0010
+            ctypes.windll.user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+            time.sleep(0.6)
+
+        subprocess.Popen(command, shell=False)
+        return f"Restarted {application}, Sir."
     except Exception as error:
-        return f"I couldn't close {application}: {error}"
-
-
-def minimize_application(application: str) -> str:
-    hwnd = find_window(application)
-    if hwnd is None:
-        return f"I couldn't find '{application}', Sir."
-    try:
-        ctypes.windll.user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE
-        return f"Minimized {application}, Sir."
-    except Exception as error:
-        return f"I couldn't minimize {application}: {error}"
-
-
-def maximize_application(application: str) -> str:
-    hwnd = find_window(application)
-    if hwnd is None:
-        return f"I couldn't find '{application}', Sir."
-    try:
-        ctypes.windll.user32.ShowWindow(hwnd, 3)  # SW_MAXIMIZE
-        ctypes.windll.user32.SetForegroundWindow(hwnd)
-        return f"Maximized {application}, Sir."
-    except Exception as error:
-        return f"I couldn't maximize {application}: {error}"
+        return f"I couldn't restart {application}, Sir. {error}"
 
 
 # =========================================================
-# SYSTEM POWER CONTROL
+# CLOSE APPLICATION
+# =========================================================
+
+def close_application(
+    application: str,
+) -> str:
+
+    hwnd = find_window(
+        application
+    )
+
+    if hwnd is None:
+        return (
+            f"I couldn't find an open window for "
+            f"{application}, Sir."
+        )
+
+    try:
+
+        import ctypes
+
+        WM_CLOSE = 0x0010
+
+        ctypes.windll.user32.PostMessageW(
+            hwnd,
+            WM_CLOSE,
+            0,
+            0,
+        )
+
+        return (
+            f"Closed {application}, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't close {application}, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# MINIMIZE APPLICATION
+# =========================================================
+
+def minimize_application(
+    application: str,
+) -> str:
+
+    hwnd = find_window(
+        application
+    )
+
+    if hwnd is None:
+        return (
+            f"I couldn't find {application}, Sir."
+        )
+
+    try:
+
+        import ctypes
+
+        ctypes.windll.user32.ShowWindow(
+            hwnd,
+            6,  # SW_MINIMIZE
+        )
+
+        return (
+            f"Minimized {application}, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't minimize {application}, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# MAXIMIZE APPLICATION
+# =========================================================
+
+def maximize_application(
+    application: str,
+) -> str:
+
+    hwnd = find_window(
+        application
+    )
+
+    if hwnd is None:
+        return (
+            f"I couldn't find {application}, Sir."
+        )
+
+    try:
+
+        import ctypes
+
+        ctypes.windll.user32.ShowWindow(
+            hwnd,
+            3,  # SW_MAXIMIZE
+        )
+
+        ctypes.windll.user32.SetForegroundWindow(
+            hwnd
+        )
+
+        return (
+            f"Maximized {application}, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't maximize {application}, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# LOCK PC
 # =========================================================
 
 def lock_pc():
+
     try:
+
+        import ctypes
+
         ctypes.windll.user32.LockWorkStation()
-        return "The PC is locked, Sir."
+
+        return (
+            "The PC is locked, Sir."
+        )
+
     except Exception as error:
-        return f"I couldn't lock the PC: {error}"
+
+        return (
+            f"I couldn't lock the PC, Sir. "
+            f"{error}"
+        )
 
 
-def shutdown_pc(delay_seconds: int = 0):
+def _require_confirmation(action_name: str, confirm: bool = False):
+    if confirm:
+        return True
+    return f"I can {action_name}, but I need explicit confirmation first, Sir."
+
+
+# =========================================================
+# SHUTDOWN
+# =========================================================
+
+def shutdown_pc(
+    delay_seconds: int = 0,
+    confirm: bool = False,
+):
+    confirmation = _require_confirmation("shut down the PC", confirm)
+    if confirmation is not True:
+        return confirmation
+
     try:
-        subprocess.Popen(["shutdown", "/s", "/t", str(delay_seconds)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(
+            [
+                "shutdown",
+                "/s",
+                "/t",
+                str(delay_seconds),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
         return "The PC is shutting down, Sir."
     except Exception as error:
-        return f"Failed to shut down the PC: {error}"
+        return f"I couldn't shut down the PC, Sir. {error}"
 
 
-def restart_pc(delay_seconds: int = 0):
+# =========================================================
+# RESTART
+# =========================================================
+
+def restart_pc(
+    delay_seconds: int = 0,
+    confirm: bool = False,
+):
+    confirmation = _require_confirmation("restart the PC", confirm)
+    if confirmation is not True:
+        return confirmation
+
     try:
-        subprocess.Popen(["shutdown", "/r", "/t", str(delay_seconds)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(
+            [
+                "shutdown",
+                "/r",
+                "/t",
+                str(delay_seconds),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
         return "The PC is restarting, Sir."
     except Exception as error:
-        return f"Failed to restart the PC: {error}"
+        return f"I couldn't restart the PC, Sir. {error}"
 
 
-def sleep_pc():
+# =========================================================
+# SLEEP
+# =========================================================
+
+def sleep_pc(confirm: bool = False):
+    confirmation = _require_confirmation("put the PC to sleep", confirm)
+    if confirmation is not True:
+        return confirmation
+
     try:
-        subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0", "1", "0"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(
+            [
+                "rundll32.exe",
+                "powrprof.dll,SetSuspendState",
+                "0",
+                "1",
+                "0",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
         return "Putting the PC to sleep, Sir."
     except Exception as error:
-        return f"Failed to put the PC to sleep: {error}"
+        return f"I couldn't put the PC to sleep, Sir. {error}"
 
 
-def sign_out():
+# =========================================================
+# SIGN OUT
+# =========================================================
+
+def sign_out(confirm: bool = False):
+    confirmation = _require_confirmation("sign you out", confirm)
+    if confirmation is not True:
+        return confirmation
+
     try:
-        subprocess.Popen(["shutdown", "/l"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(
+            [
+                "shutdown",
+                "/l",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
         return "Signing you out, Sir."
     except Exception as error:
-        return f"Failed to sign out: {error}"
+        return f"I couldn't sign you out, Sir. {error}"
 
+
+# =========================================================
+# CANCEL SHUTDOWN
+# =========================================================
 
 def cancel_shutdown():
+
     try:
-        subprocess.Popen(["shutdown", "/a"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return "Scheduled shutdown has been cancelled, Sir."
-    except Exception as error:
-        return f"Failed to cancel shutdown: {error}"
 
-
-# =========================================================
-# SCREENSHOT ENGINE
-# =========================================================
-
-def take_screenshot() -> str:
-    try:
-        from PIL import ImageGrab
-
-        shots_dir = Path.home() / "Pictures" / "Screenshots"
-        shots_dir.mkdir(parents=True, exist_ok=True)
-
-        filename = f"Screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-        file_path = shots_dir / filename
-
-        img = ImageGrab.grab()
-        img.save(file_path, "PNG")
-
-        return f"Screenshot saved to your Screenshots folder, Sir."
-    except ImportError:
-        return "Pillow is not installed. Please install it using 'pip install pillow', Sir."
-    except Exception as error:
-        return f"I couldn't capture the screen: {error}"
-
-
-# =========================================================
-# PURE WIN32 CLIPBOARD
-# =========================================================
-
-def get_clipboard_text() -> str:
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
-
-    if not user32.OpenClipboard(None):
-        return "I couldn't access the clipboard, Sir."
-    try:
-        handle = user32.GetClipboardData(CF_UNICODETEXT)
-        if not handle:
-            return "The clipboard is currently empty, Sir."
-        kernel32.GlobalLock.restype = ctypes.c_wchar_p
-        text = kernel32.GlobalLock(handle)
-        kernel32.GlobalUnlock(handle)
-        if not text:
-            return "The clipboard is empty, Sir."
-        return f"Your clipboard contains: {text}"
-    except Exception as error:
-        return f"Failed to read clipboard: {error}"
-    finally:
-        user32.CloseClipboard()
-
-
-def set_clipboard_text(text: str) -> str:
-    user32 = ctypes.windll.user32
-    kernel32 = ctypes.windll.kernel32
-
-    if not user32.OpenClipboard(None):
-        return "I couldn't access the clipboard, Sir."
-    try:
-        user32.EmptyClipboard()
-        encoded = text.encode("utf-16le") + b"\x00\x00"
-        kernel32.GlobalAlloc.restype = wintypes.HGLOBAL
-        handle = kernel32.GlobalAlloc(GHND, len(encoded))
-        ptr = kernel32.GlobalLock(handle)
-        ctypes.memmove(ptr, encoded, len(encoded))
-        kernel32.GlobalUnlock(handle)
-        user32.SetClipboardData(CF_UNICODETEXT, handle)
-        return f"Copied to clipboard, Sir."
-    except Exception as error:
-        return f"Failed to copy to clipboard: {error}"
-    finally:
-        user32.CloseClipboard()
-
-
-def clear_clipboard() -> str:
-    user32 = ctypes.windll.user32
-    if not user32.OpenClipboard(None):
-        return "I couldn't access the clipboard, Sir."
-    try:
-        user32.EmptyClipboard()
-        return "Clipboard cleared, Sir."
-    finally:
-        user32.CloseClipboard()
-
-
-# =========================================================
-# TELEMETRY & HARDWARE INFO
-# =========================================================
-
-def get_system_information():
-    try:
-        return (
-            f"Operating system: {platform.system()} {platform.release()}. "
-            f"Computer name: {platform.node()}. "
-            f"Processor: {platform.processor()}."
+        subprocess.Popen(
+            [
+                "shutdown",
+                "/a",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
+
+        return (
+            "The scheduled shutdown has been cancelled, Sir."
+        )
+
     except Exception as error:
-        return f"Couldn't read system information: {error}"
+
+        return (
+            f"I couldn't cancel the shutdown, Sir. "
+            f"{error}"
+        )
 
 
-def get_memory_information():
+def set_brightness(value: int) -> str:
+    value = max(0, min(100, int(value)))
     try:
-        import psutil
-        memory = psutil.virtual_memory()
-        used_gb = memory.used / (1024 ** 3)
-        total_gb = memory.total / (1024 ** 3)
-        return f"RAM usage is {memory.percent:.0f} percent. {used_gb:.1f} GB of {total_gb:.1f} GB is in use, Sir."
+        script = (
+            "Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods "
+            f"| ForEach-Object {{ $_.WmiSetBrightness(1, {value}) }}"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return f"Brightness set to {value} percent, Sir."
     except Exception as error:
-        return f"Couldn't read RAM usage: {error}"
+        return f"I couldn't adjust brightness, Sir. {error}"
 
 
-def get_cpu_information():
+def adjust_brightness(delta: int) -> str:
     try:
-        import psutil
-        usage = psutil.cpu_percent(interval=0.5)
-        cores = psutil.cpu_count(logical=True)
-        return f"CPU usage is currently {usage:.0f} percent across {cores} logical processors, Sir."
-    except Exception as error:
-        return f"Couldn't read CPU usage: {error}"
-
-
-def get_storage_information():
-    try:
-        import psutil
-        total, used = 0, 0
-        for partition in psutil.disk_partitions():
-            try:
-                usage = psutil.disk_usage(partition.mountpoint)
-                total += usage.total
-                used += usage.used
-            except Exception:
-                continue
-        if total == 0:
-            return "No accessible storage drives detected, Sir."
-
-        total_gb = total / (1024 ** 3)
-        used_gb = used / (1024 ** 3)
-        percent = (used / total) * 100
-        return f"Storage is at {percent:.0f} percent capacity. {used_gb:.1f} GB used out of {total_gb:.1f} GB, Sir."
-    except Exception as error:
-        return f"Couldn't read storage info: {error}"
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightness).CurrentBrightness"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        current = int(result.stdout.strip().splitlines()[-1]) if result.stdout.strip() else 50
+    except Exception:
+        current = 50
+    target = max(0, min(100, current + int(delta)))
+    return set_brightness(target)
 
 
 def get_battery_information():
+    if psutil is None:
+        return "The psutil package is required for battery information, Sir."
     try:
-        import psutil
         battery = psutil.sensors_battery()
         if battery is None:
-            return "This PC is connected directly to AC power and has no battery installed, Sir."
-        status = "plugged in" if battery.power_plugged else "on battery power"
-        return f"Battery is at {battery.percent:.0f} percent and is currently {status}, Sir."
+            return "I couldn't read battery information on this PC, Sir."
+        percent = max(0, min(100, int(battery.percent)))
+        status = "Charging" if battery.power_plugged else "Discharging"
+        return f"Battery is {percent}% and currently {status.lower()}, Sir."
     except Exception as error:
-        return f"Couldn't read battery status: {error}"
+        return f"I couldn't read battery information, Sir. {error}"
 
 
 def get_network_information():
     try:
-        hostname = socket.gethostname()
-        local_ip = socket.gethostbyname(hostname)
-        return f"Computer name is {hostname}, and your local IP address is {local_ip}, Sir."
+        import socket
+        host = socket.gethostname()
+        addrs = socket.gethostbyname_ex(host)
+        ips = [ip for ip in addrs[2] if not ip.startswith("127.")][:5]
+        if ips:
+            return f"Computer name: {host}. Local IP addresses: {', '.join(ips)}, Sir."
+        return f"Computer name: {host}. I couldn't determine a non-local IP address, Sir."
     except Exception as error:
-        return f"Couldn't read network information: {error}"
+        return f"I couldn't read the network information, Sir. {error}"
+
+
+def take_screenshot(output_path: str | None = None) -> str:
+    try:
+        from PIL import ImageGrab
+    except Exception:
+        return "Screenshot support requires Pillow, which is not installed in this environment, Sir."
+
+    try:
+        if output_path is None:
+            folder = Path.home() / "Pictures" / "ALFRED Screenshots"
+            folder.mkdir(parents=True, exist_ok=True)
+            output_path = folder / f"alfred_screenshot_{int(time.time())}.png"
+        else:
+            output_path = Path(output_path)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        ImageGrab.grab().save(output_path)
+        return f"Screenshot saved to {output_path}, Sir."
+    except Exception as error:
+        return f"I couldn't take a screenshot, Sir. {error}"
+
+
+def empty_recycle_bin(confirm: bool = False):
+    if not confirm:
+        return "I can empty the Recycle Bin, but I need explicit confirmation first, Sir."
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Clear-RecycleBin -Force"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return "The Recycle Bin has been emptied, Sir."
+    except Exception as error:
+        return f"I couldn't empty the Recycle Bin, Sir. {error}"
+
+
+def get_clipboard_text():
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            text = root.clipboard_get()
+        finally:
+            root.update()
+            root.destroy()
+        return text if text else "The clipboard is empty, Sir."
+    except Exception as error:
+        return f"I couldn't read the clipboard, Sir. {error}"
+
+
+def set_clipboard_text(text: str):
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        root.clipboard_clear()
+        root.clipboard_append(str(text or ""))
+        root.update()
+        root.destroy()
+        return "Clipboard updated, Sir."
+    except Exception as error:
+        return f"I couldn't update the clipboard, Sir. {error}"
+
+
+def clear_clipboard():
+    try:
+        import tkinter as tk
+        root = tk.Tk()
+        root.withdraw()
+        root.clipboard_clear()
+        root.update()
+        root.destroy()
+        return "The clipboard has been cleared, Sir."
+    except Exception as error:
+        return f"I couldn't clear the clipboard, Sir. {error}"
+
+
+def open_settings(target: str = "") -> str:
+    """Open a Windows Settings page or common system tool."""
+    mapping = {
+        "settings": "ms-settings:",
+        "display": "ms-settings:display",
+        "sound": "ms-settings:sound",
+        "network": "ms-settings:network-wifi",
+        "wifi": "ms-settings:network-wifi",
+        "bluetooth": "ms-settings:bluetooth",
+        "personalization": "ms-settings:personalization",
+        "apps": "ms-settings:appsfeatures",
+        "storage": "ms-settings:storagesense",
+        "update": "ms-settings:windowsupdate",
+        "windows update": "ms-settings:windowsupdate",
+        "task manager": "taskmgr.exe",
+        "taskmgr": "taskmgr.exe",
+        "device manager": "devmgmt.msc",
+        "control panel": "control.exe",
+    }
+    page = normalize_text(target or "settings")
+    command = mapping.get(page, mapping.get("settings"))
+    try:
+        if command.startswith("ms-settings:"):
+            os.startfile(command)
+        else:
+            subprocess.Popen(command, shell=True)
+        return f"Opened {target or 'Settings'}, Sir."
+    except Exception as error:
+        return f"I couldn't open the requested settings page, Sir. {error}"
+
+
+def get_wifi_status() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "netsh wlan show interfaces"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        if not output:
+            return "I couldn't read the Wi‑Fi adapter state, Sir."
+        return output.replace("\r", "")[:600]
+    except Exception as error:
+        return f"I couldn't read Wi‑Fi status, Sir. {error}"
+
+
+def list_wifi_networks() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "netsh wlan show networks mode=Bssid"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        if not output:
+            return "There are no visible Wi‑Fi networks in range, Sir."
+        return output.replace("\r", "")[:800]
+    except Exception as error:
+        return f"I couldn't list Wi‑Fi networks, Sir. {error}"
+
+
+def get_connected_wifi() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "netsh wlan show interfaces | Select-String -Pattern 'SSID|Signal|State'"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        if not output:
+            return "No Wi‑Fi network is currently connected, Sir."
+        return output.replace("\r", "")
+    except Exception as error:
+        return f"I couldn't read the connected Wi‑Fi network, Sir. {error}"
+
+
+def connect_to_wifi_network(ssid: str, password: str | None = None) -> str:
+    ssid = (ssid or "").strip()
+    if not ssid:
+        return "Which Wi‑Fi network should I connect to, Sir?"
+    try:
+        saved = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"netsh wlan show profiles name=\"{ssid}\""],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if saved.returncode != 0 or "Profile \"" not in saved.stdout:
+            return f"I found '{ssid}', but it is not a saved Wi‑Fi profile on this PC. Please connect through Windows first, Sir."
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"netsh wlan connect name=\"{ssid}\""],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return f"I attempted to connect to '{ssid}', Sir."
+    except Exception as error:
+        return f"I couldn't connect to '{ssid}', Sir. {error}"
+
+
+def disconnect_wifi() -> str:
+    try:
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "netsh wlan disconnect"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return "Wi‑Fi disconnected, Sir."
+    except Exception as error:
+        return f"I couldn't disconnect Wi‑Fi, Sir. {error}"
+
+
+def toggle_wifi(enabled: bool) -> str:
+    try:
+        action = "enable" if enabled else "disable"
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"(Get-NetAdapter -PhysicalMediaType 802.11 2>$null | Where-Object {{ $_.Status -ne 'Disconnected' }} | Select-Object -First 1).Name | ForEach-Object {{ netsh interface set interface \"$_\" admin={action} }}"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return f"Wi‑Fi turned {'on' if enabled else 'off'}, Sir."
+    except Exception as error:
+        return f"I couldn't change Wi‑Fi state, Sir. {error}"
+
+
+def get_network_interfaces() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-NetAdapter | Format-Table -AutoSize Name, Status, InterfaceDescription, ifIndex"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        return output if output else "I couldn't read the network interfaces, Sir."
+    except Exception as error:
+        return f"I couldn't read the network interfaces, Sir. {error}"
+
+
+def get_ip_information() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-NetIPAddress | Format-Table -AutoSize IPAddress, InterfaceAlias, PrefixLength"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        return output if output else "I couldn't read the IP configuration, Sir."
+    except Exception as error:
+        return f"I couldn't read the IP information, Sir. {error}"
+
+
+def ping_host(host: str = "8.8.8.8") -> str:
+    host = (host or "8.8.8.8").strip()
+    try:
+        result = subprocess.run(
+            ["ping", "-n", "2", host],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = result.stdout + result.stderr
+        return output.strip() if output.strip() else f"I couldn't ping {host}, Sir."
+    except Exception as error:
+        return f"I couldn't ping {host}, Sir. {error}"
+
+
+def get_bluetooth_status() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName, Status, InstanceId | Format-Table -AutoSize"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        return output if output else "Bluetooth adapter information is not available on this system, Sir."
+    except Exception as error:
+        return f"I couldn't read Bluetooth status, Sir. {error}"
+
+
+def list_bluetooth_devices() -> str:
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", "Get-PnpDevice -Class Bluetooth | Select-Object FriendlyName, Status | Format-Table -AutoSize"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        output = result.stdout.strip()
+        return output if output else "No Bluetooth devices were detected, Sir."
+    except Exception as error:
+        return f"I couldn't enumerate Bluetooth devices, Sir. {error}"
+
+
+def connect_bluetooth_device(device_name: str) -> str:
+    device_name = (device_name or "").strip()
+    if not device_name:
+        return "Which Bluetooth device should I connect to, Sir?"
+    try:
+        device = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"Get-PnpDevice -Class Bluetooth | Where-Object {{ $_.FriendlyName -match '{device_name}' }} | Select-Object -First 1 -ExpandProperty FriendlyName"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if device.stdout.strip():
+            return f"I found '{device.stdout.strip()}', but Windows does not expose a reliable direct device connection API from this environment. I opened the Bluetooth settings page instead, Sir."
+        return f"I couldn't find a matching Bluetooth device named '{device_name}' on this PC, Sir."
+    except Exception as error:
+        return f"I couldn't connect to '{device_name}', Sir. {error}"
+
+
+def disconnect_bluetooth_device(device_name: str) -> str:
+    device_name = (device_name or "").strip()
+    if not device_name:
+        return "Which Bluetooth device should I disconnect, Sir?"
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", f"Get-PnpDevice -Class Bluetooth | Where-Object {{ $_.FriendlyName -match '{device_name}' }} | Select-Object -First 1 -ExpandProperty FriendlyName"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.stdout.strip():
+            return f"I found '{result.stdout.strip()}', but disconnecting a Bluetooth device requires the OS/device-specific connection state and is not safely automatable here, Sir."
+        return f"I couldn't find a matching Bluetooth device named '{device_name}' to disconnect, Sir."
+    except Exception as error:
+        return f"I couldn't disconnect '{device_name}', Sir. {error}"
+
+
+def toggle_bluetooth(enabled: bool) -> str:
+    try:
+        action = "Enable" if enabled else "Disable"
+        script = (
+            f"Get-PnpDevice -Class Bluetooth | ForEach-Object {{ "
+            f"if ($_.Status -eq 'OK') {{ $_ | {action}-PnpDevice -Confirm:$false }} }}"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", script],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return f"Bluetooth turned {'on' if enabled else 'off'}, Sir."
+    except Exception as error:
+        return f"I couldn't change Bluetooth state, Sir. {error}"
+
+
+def toggle_airplane_mode(enabled: bool) -> str:
+    try:
+        target_state = "enabled" if enabled else "disabled"
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             f"Get-NetAdapter | Where-Object {{ $_.Name -match 'Wi-Fi|Ethernet' }} | ForEach-Object {{ Disable-NetAdapter -Name $_.Name -Confirm:$false }}" if not enabled else "Get-NetAdapter | Where-Object { $_.Name -match 'Wi-Fi|Ethernet' } | ForEach-Object { Enable-NetAdapter -Name $_.Name -Confirm:$false }"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        return f"Airplane mode is {target_state}, Sir."
+    except Exception as error:
+        return f"I couldn't change airplane mode, Sir. {error}"
+
+
+def get_gpu_information():
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-CimInstance Win32_VideoController | Select-Object -First 1 Name, DriverVersion | Format-Table -HideTableHeaders"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        text = result.stdout.strip().replace("\r", "")
+        if not text:
+            return "I couldn't read the GPU information, Sir."
+        return f"GPU: {text.replace(chr(10), ' ').strip()}, Sir."
+    except Exception as error:
+        return f"I couldn't read the GPU information, Sir. {error}"
+
+
+def get_running_applications():
+    try:
+        import psutil
+        procs = sorted(psutil.process_iter(attrs=['name']), key=lambda p: p.info.get('name', '').lower())
+        names = []
+        seen = set()
+        for proc in procs:
+            name = (proc.info.get('name') or '').strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            names.append(name)
+            if len(names) >= 12:
+                break
+        if not names:
+            return "I couldn't read the running applications, Sir."
+        return "Running apps: " + ", ".join(names) + ", Sir."
+    except Exception as error:
+        return f"I couldn't read the running applications, Sir. {error}"
+
+
+def get_current_datetime() -> str:
+    from datetime import datetime
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def get_drive_information() -> str:
+    try:
+        import psutil
+        drives = []
+        for partition in psutil.disk_partitions(all=False):
+            try:
+                usage = psutil.disk_usage(partition.mountpoint)
+                drives.append(
+                    f"{partition.device} -> {partition.mountpoint} | total={usage.total / (1024 ** 3):.1f}GB free={usage.free / (1024 ** 3):.1f}GB"
+                )
+            except Exception:
+                continue
+        if not drives:
+            return "I couldn't read the drive information, Sir."
+        return "\n".join(drives[:8]) + ", Sir."
+    except Exception as error:
+        return f"I couldn't read the drive information, Sir. {error}"
+
+
+def get_storage_remaining() -> str:
+    try:
+        import psutil
+        total = 0
+        free = 0
+        for partition in psutil.disk_partitions(all=False):
+            try:
+                usage = psutil.disk_usage(partition.mountpoint)
+                total += usage.total
+                free += usage.free
+            except Exception:
+                continue
+        if total == 0:
+            return "I couldn't read the remaining free space, Sir."
+        total_gb = total / (1024 ** 3)
+        free_gb = free / (1024 ** 3)
+        return f"Free space is {free_gb:.1f} GB of {total_gb:.1f} GB total, Sir."
+    except Exception as error:
+        return f"I couldn't read the remaining free space, Sir. {error}"
+
+
+def get_network_status() -> str:
+    try:
+        result = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-NetAdapter | Select-Object Name, Status, InterfaceDescription, LinkSpeed | Format-Table -AutoSize; Write-Host '---'; Get-NetIPAddress | Select-Object InterfaceAlias, IPAddress, PrefixLength | Format-Table -AutoSize",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        output = (result.stdout or "") + (result.stderr or "")
+        output = output.strip().replace("\r", "")
+        return output if output else "I couldn't read the network status, Sir."
+    except Exception as error:
+        return f"I couldn't read the network status, Sir. {error}"
+
+
+def record_screen(duration_seconds: int = 10, output_path: str | None = None) -> str:
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        return "Screen recording requires ffmpeg, which is not installed on this PC, Sir."
+    target = Path(output_path) if output_path else Path.home() / "Videos" / "ALFRED Screen Recording" / f"alfred_record_{int(time.time())}.mp4"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        subprocess.run([
+            ffmpeg,
+            "-y",
+            "-f",
+            "gdigrab",
+            "-framerate",
+            "30",
+            "-i",
+            "desktop",
+            "-t",
+            str(max(1, int(duration_seconds))),
+            str(target),
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+        return f"Screen recording saved to {target}, Sir."
+    except Exception as error:
+        return f"I couldn't record the screen, Sir. {error}"
+
+
+# =========================================================
+# SYSTEM INFORMATION
+# =========================================================
+
+def get_system_information():
+
+    try:
+
+        import platform
+
+        return (
+            f"Operating system: {platform.system()} "
+            f"{platform.release()}. "
+            f"Computer: {platform.node()}. "
+            f"Processor: {platform.processor()}."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't read the system information, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# RAM INFORMATION
+# =========================================================
+
+def get_memory_information():
+
+    try:
+
+        import psutil
+
+        memory = psutil.virtual_memory()
+
+        used_gb = memory.used / (
+            1024 ** 3
+        )
+
+        total_gb = memory.total / (
+            1024 ** 3
+        )
+
+        percent = memory.percent
+
+        return (
+            f"RAM usage is {percent:.0f} percent. "
+            f"{used_gb:.1f} GB of "
+            f"{total_gb:.1f} GB is currently in use, Sir."
+        )
+
+    except ImportError:
+
+        return (
+            "The psutil package is required for RAM "
+            "information, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't read RAM usage, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# CPU INFORMATION
+# =========================================================
+
+def get_cpu_information():
+
+    try:
+
+        import psutil
+
+        usage = psutil.cpu_percent(
+            interval=0.5
+        )
+
+        cores = psutil.cpu_count(
+            logical=True
+        )
+
+        return (
+            f"CPU usage is {usage:.0f} percent "
+            f"across {cores} logical processors, Sir."
+        )
+
+    except ImportError:
+
+        return (
+            "The psutil package is required for CPU "
+            "information, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't read CPU usage, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# STORAGE INFORMATION
+# =========================================================
+
+def get_storage_information():
+
+    try:
+
+        import psutil
+
+        total = 0
+        used = 0
+
+        for partition in psutil.disk_partitions():
+
+            try:
+
+                usage = psutil.disk_usage(
+                    partition.mountpoint
+                )
+
+                total += usage.total
+                used += usage.used
+
+            except Exception:
+                continue
+
+        if total == 0:
+            return (
+                "I couldn't read the storage information, Sir."
+            )
+
+        total_gb = total / (
+            1024 ** 3
+        )
+
+        used_gb = used / (
+            1024 ** 3
+        )
+
+        percent = (
+            used / total
+        ) * 100
+
+        return (
+            f"Storage usage is {percent:.0f} percent. "
+            f"{used_gb:.1f} GB of {total_gb:.1f} GB "
+            f"is currently used, Sir."
+        )
+
+    except ImportError:
+
+        return (
+            "The psutil package is required for "
+            "storage information, Sir."
+        )
+
+    except Exception as error:
+
+        return (
+            f"I couldn't read storage information, Sir. "
+            f"{error}"
+        )
+
+
+# =========================================================
+# TEST
+# =========================================================
+
+if __name__ == "__main__":
+
+    print(
+        open_application("notepad")
+    )
+
+    time.sleep(1)
+
+    print(
+        get_system_information()
+    )
+
+    print(
+        get_cpu_information()
+    )
+
+    print(
+        get_memory_information()
+    )
+
+    print(
+        get_storage_information()
+    )

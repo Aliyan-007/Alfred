@@ -34,12 +34,6 @@ REMOTE_DEVICE_TOOLS = {
     "open_url",
     "web_search",
 
-    "play_spotify",
-    "spotify_control",
-
-    "play_youtube",
-    "youtube_control",
-
     "pc_volume_up",
     "pc_volume_down",
     "pc_volume_mute",
@@ -53,6 +47,10 @@ REMOTE_DEVICE_TOOLS = {
 
     "research_youtube",
 }
+
+# Browser-based media tools must stay local to the PC so they can use the
+# existing Brave/CDP path instead of a remote device hub that can fail with
+# WinError 1225 when the hub is unavailable or the network route is refused.
 
 
 def execute_alfred_tool(
