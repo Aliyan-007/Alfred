@@ -1,0 +1,32 @@
+model_name: alfred
+
+target_phrases:
+  - "alfred"
+  - "hey alfred"
+
+data_dir: "./wakeword_data"
+output_dir: "./wakeword_output"
+
+n_samples: 1000
+n_samples_val: 200
+n_background_samples: 100
+n_background_samples_val: 20
+
+tts_batch_size: 50
+tts_backend: piper_vits
+
+augmentation:
+  clip_duration: 2.0
+  batch_size: 16
+  rounds: 1
+  background_paths:
+    - "./wakeword_data/backgrounds"
+  rir_paths:
+    - "./wakeword_data/rirs"
+
+model:
+  model_type: conv_attention
+  model_size: small
+
+steps: 5000
+learning_rate: 0.0001

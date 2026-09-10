@@ -1,135 +1,407 @@
 ﻿import time
-import threading
+
 import numpy as np
 import sounddevice as sd
 
+
+# =========================================================
+# CONFIGURATION
+# =========================================================
+
 SAMPLE_RATE = 16000
-CHUNK_SIZE = 1280       # 80ms chunk
-THRESHOLD = 0.70        # Confidence threshold
-MIN_ENERGY_THRESHOLD = 0.004  # Must have actual acoustic sound (eliminates silence triggers)
-WAKE_COOLDOWN = 1.0
+CHUNK_SIZE = 1280
 
-IS_SPEAKING = threading.Event()
-SELECTED_MIC_INDEX = None
+# Exact prediction key returned by D:\alfred\alfred.onnx
+MODEL_NAME = "alfred"
+
+# Wake-word confidence threshold.
+THRESHOLD = 0.75
+
+# Number of consecutive strong model predictions required.
+REQUIRED_DETECTIONS = 3
+
+# Minimum microphone RMS level required before a wake
+# prediction can be accepted.
+#
+# This prevents very quiet background/noise from activating
+# the wake-word model.
+MIN_AUDIO_LEVEL = 0.010
+
+# Ignore the detector briefly after successful activation.
+WAKE_COOLDOWN = 1.5
 
 
-def set_speaking(state: bool):
-    if state:
-        IS_SPEAKING.set()
-    else:
-        IS_SPEAKING.clear()
+# =========================================================
+# GLOBAL SPEAKING STATE
+# =========================================================
 
+_IS_SPEAKING = False
+
+
+def set_speaking(value: bool):
+    """
+    Enable or disable wake-word detection while ALFRED
+    is speaking.
+    """
+    global _IS_SPEAKING
+    _IS_SPEAKING = bool(value)
+
+
+def is_speaking():
+    """
+    Return True when ALFRED is currently speaking.
+    """
+    return _IS_SPEAKING
+
+
+# =========================================================
+# FIND WORKING MICROPHONE
+# =========================================================
 
 def find_microphone():
-    global SELECTED_MIC_INDEX
-    if SELECTED_MIC_INDEX is not None:
-        return SELECTED_MIC_INDEX
+    """
+    Find a usable input microphone.
+
+    Preference order:
+        1. Headset
+        2. Hands-Free
+        3. Microphone
+        4. Mic
+        5. Default input
+        6. First available input
+    """
+
+    print()
+    print("Searching for an available microphone...")
 
     devices = sd.query_devices()
-    hostapis = sd.query_hostapis()
 
     candidates = []
+
     for index, device in enumerate(devices):
+
         if device["max_input_channels"] > 0:
-            hostapi_name = hostapis[device["hostapi"]]["name"]
-            if "wdm-ks" in hostapi_name.lower():
-                continue
-            candidates.append((index, device["name"], hostapi_name))
+
+            candidates.append(
+                (
+                    index,
+                    device["name"],
+                    device["max_input_channels"],
+                )
+            )
 
     if not candidates:
-        SELECTED_MIC_INDEX = None
-        return None
 
-    preferred_words = ["hands-free", "headset", "microphone", "mic", "array"]
+        raise RuntimeError(
+            "No microphone device was found."
+        )
+
+    preferred_words = [
+        "headset",
+        "hands-free",
+        "microphone",
+        "mic",
+    ]
+
     for word in preferred_words:
-        for index, name, hapi in candidates:
-            if word in name.lower():
-                print(f"[AUDIO] Selected microphone [{index}]: {name} ({hapi})", flush=True)
-                SELECTED_MIC_INDEX = index
-                return SELECTED_MIC_INDEX
+
+        for index, name, channels in candidates:
+
+            if word.lower() in name.lower():
+
+                print(
+                    f"Using microphone [{index}]: {name}"
+                )
+
+                return index
+
+    # -----------------------------------------------------
+    # Default input fallback
+    # -----------------------------------------------------
 
     default_input = sd.default.device[0]
-    if default_input is not None and 0 <= default_input < len(devices):
-        SELECTED_MIC_INDEX = default_input
-        return SELECTED_MIC_INDEX
 
-    SELECTED_MIC_INDEX = candidates[0][0]
-    return SELECTED_MIC_INDEX
+    if (
+        default_input is not None
+        and default_input >= 0
+        and default_input < len(devices)
+    ):
+
+        print(
+            f"Using default microphone [{default_input}]: "
+            f"{devices[default_input]['name']}"
+        )
+
+        return default_input
+
+    # -----------------------------------------------------
+    # First available microphone fallback
+    # -----------------------------------------------------
+
+    index, name, channels = candidates[0]
+
+    print(
+        f"Using available microphone [{index}]: {name}"
+    )
+
+    return index
 
 
-def get_audio_rms(pcm_data: np.ndarray) -> float:
-    if len(pcm_data) == 0:
+# =========================================================
+# AUDIO LEVEL
+# =========================================================
+
+def _get_audio_level(pcm):
+    """
+    Calculate RMS microphone level.
+
+    Returns a normalized value approximately between
+    0.0 and 1.0 for normal int16 microphone audio.
+    """
+
+    if pcm.size == 0:
         return 0.0
-    return float(np.sqrt(np.mean(pcm_data.astype(np.float32) ** 2))) / 32768.0
 
+    samples = pcm.astype(np.float32) / 32768.0
+
+    return float(
+        np.sqrt(
+            np.mean(
+                samples * samples
+            )
+        )
+    )
+
+
+# =========================================================
+# WAKE WORD LISTENER
+# =========================================================
 
 def wait_for_wake_word(model):
-    while IS_SPEAKING.is_set():
-        time.sleep(0.1)
+    """
+    Block until the ALFRED wake word is detected.
+
+    False-positive protection:
+
+        1. Uses the exact 'alfred' model output.
+        2. Requires multiple consecutive detections.
+        3. Requires sufficient microphone audio energy.
+        4. Resets confirmation when audio becomes quiet.
+        5. Resets confirmation when model confidence drops.
+        6. Ignores detection while ALFRED is speaking.
+        7. Applies a short cooldown after activation.
+    """
 
     microphone = find_microphone()
-    loaded_models = list(model.models.keys())
-    model_name = loaded_models[0] if loaded_models else "alfred"
 
-    print(f"\n[AUDIO] Calibrating microphone for [{model_name}]...", flush=True)
-    model.reset()
+    print()
+    print("Waiting for wake word...")
+    print(
+        f"Microphone device: {microphone}"
+    )
+    print(
+        f"Wake threshold: {THRESHOLD:.2f}"
+    )
+    print(
+        f"Required confirmations: "
+        f"{REQUIRED_DETECTIONS}"
+    )
+    print(
+        f"Minimum audio level: "
+        f"{MIN_AUDIO_LEVEL:.4f}"
+    )
 
     consecutive_detections = 0
 
-    with sd.InputStream(
+    with sd.RawInputStream(
         device=microphone,
         samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="int16",
         blocksize=CHUNK_SIZE,
+        dtype="int16",
+        channels=1,
     ) as stream:
 
-        # Warmup buffer: Feed 20 frames to purge initialization state
-        for _ in range(20):
-            audio_data, _ = stream.read(CHUNK_SIZE)
-            pcm = audio_data.flatten()
-            model.predict(pcm)
-
-        print(f"Waiting for wake word: [{model_name}]...\n", flush=True)
-
         while True:
-            if IS_SPEAKING.is_set():
-                stream.read(CHUNK_SIZE)
-                continue
 
-            audio_data, overflowed = stream.read(CHUNK_SIZE)
-            if overflowed:
-                continue
+            # -------------------------------------------------
+            # Ignore microphone while ALFRED is speaking.
+            # -------------------------------------------------
 
-            pcm = audio_data.flatten()
+            if is_speaking():
 
-            # 1. Neutralize DC offset artifact
-            pcm = (pcm - np.mean(pcm)).astype(np.int16)
-
-            # 2. Acoustic Energy Gate: Block silent frame artifacts
-            energy = get_audio_rms(pcm)
-            if energy < MIN_ENERGY_THRESHOLD:
-                # Silence in room -> feed to model to keep window rolling, but never trigger
-                model.predict(pcm)
                 consecutive_detections = 0
+
+                time.sleep(0.05)
+
                 continue
 
-            # 3. Model Inference
-            prediction = model.predict(pcm)
+            # -------------------------------------------------
+            # Read microphone audio.
+            # -------------------------------------------------
 
-            for key, score in prediction.items():
-                score_val = float(score)
+            audio, overflowed = stream.read(
+                CHUNK_SIZE
+            )
 
-                if score_val >= THRESHOLD:
-                    consecutive_detections += 1
-                    # Require 2 frames of confidence or 1 very strong frame (>0.85)
-                    if consecutive_detections >= 2 or score_val >= 0.85:
-                        print()
-                        print("=" * 55)
-                        print(f"WAKE WORD DETECTED ({key}: {score_val:.4f})")
-                        print("=" * 55)
-                        model.reset()
-                        time.sleep(WAKE_COOLDOWN)
-                        return True
-                else:
+            if overflowed:
+
+                consecutive_detections = 0
+
+                continue
+
+            pcm = np.frombuffer(
+                audio,
+                dtype=np.int16,
+            )
+
+            if pcm.size == 0:
+
+                consecutive_detections = 0
+
+                continue
+
+            # -------------------------------------------------
+            # AUDIO ENERGY GATE
+            #
+            # Do not allow an extremely quiet microphone
+            # chunk to activate the wake-word model.
+            # -------------------------------------------------
+
+            audio_level = _get_audio_level(pcm)
+
+            if audio_level < MIN_AUDIO_LEVEL:
+
+                if consecutive_detections > 0:
+
+                    print(
+                        "[WAKE] Audio too quiet; "
+                        "confirmation reset."
+                    )
+
+                consecutive_detections = 0
+
+                continue
+
+            # -------------------------------------------------
+            # RUN CUSTOM ALFRED MODEL
+            # -------------------------------------------------
+
+            try:
+
+                prediction = model.predict(pcm)
+
+            except Exception as error:
+
+                print(
+                    f"[WAKE WORD] Prediction error: "
+                    f"{error}"
+                )
+
+                consecutive_detections = 0
+
+                continue
+
+            # -------------------------------------------------
+            # READ ONLY THE ALFRED MODEL
+            #
+            # No fallback to another model.
+            # -------------------------------------------------
+
+            try:
+
+                score = float(
+                    prediction.get(
+                        MODEL_NAME,
+                        0.0,
+                    )
+                )
+
+            except (
+                TypeError,
+                ValueError,
+            ):
+
+                score = 0.0
+
+            # -------------------------------------------------
+            # DEBUG ONLY FOR MEANINGFUL SCORES
+            # -------------------------------------------------
+
+            if score >= 0.10:
+
+                print(
+                    f"[WAKE] {MODEL_NAME}: "
+                    f"{score:.6f} | "
+                    f"Audio: {audio_level:.4f}"
+                )
+
+            # -------------------------------------------------
+            # CONFIDENCE CONFIRMATION
+            # -------------------------------------------------
+
+            if score >= THRESHOLD:
+
+                consecutive_detections += 1
+
+                print(
+                    f"[WAKE] Strong detection "
+                    f"{consecutive_detections}/"
+                    f"{REQUIRED_DETECTIONS} "
+                    f"({score:.6f})"
+                )
+
+                # -------------------------------------------------
+                # Require all consecutive confirmations.
+                # -------------------------------------------------
+
+                if (
+                    consecutive_detections
+                    >= REQUIRED_DETECTIONS
+                ):
+
+                    print()
+                    print("=" * 55)
+                    print(
+                        "              WAKE WORD DETECTED"
+                    )
+                    print("=" * 55)
+                    print(
+                        f"Model: {MODEL_NAME}"
+                    )
+                    print(
+                        f"Detection score: "
+                        f"{score:.6f}"
+                    )
+                    print(
+                        f"Audio level: "
+                        f"{audio_level:.4f}"
+                    )
+                    print()
+
                     consecutive_detections = 0
+
+                    # -------------------------------------------------
+                    # Prevent immediate retriggering from the same
+                    # spoken audio.
+                    # -------------------------------------------------
+
+                    time.sleep(
+                        WAKE_COOLDOWN
+                    )
+
+                    return True
+
+            else:
+
+                # -------------------------------------------------
+                # Confidence dropped below threshold.
+                # Break the confirmation chain.
+                # -------------------------------------------------
+
+                if consecutive_detections > 0:
+
+                    print(
+                        "[WAKE] Confirmation reset."
+                    )
+
+                consecutive_detections = 0
