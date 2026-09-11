@@ -15,7 +15,7 @@ CHUNK_SIZE = 1280
 MODEL_NAME = "alfred"
 
 # Wake-word confidence threshold.
-THRESHOLD = 0.40
+THRESHOLD = 0.55
 
 # Number of consecutive strong model predictions required.
 REQUIRED_DETECTIONS = 2
@@ -25,10 +25,13 @@ REQUIRED_DETECTIONS = 2
 #
 # This prevents very quiet background/noise from activating
 # the wake-word model.
-MIN_AUDIO_LEVEL = 0.010
+MIN_AUDIO_LEVEL = 0.015
 
 # Ignore the detector briefly after successful activation.
-WAKE_COOLDOWN = 1.5
+WAKE_COOLDOWN = 1.0
+
+# Any score below this is treated as not wake-like.
+LOW_CONFIDENCE_THRESHOLD = 0.20
 
 
 # =========================================================
@@ -279,7 +282,6 @@ def wait_for_wake_word(model):
                     )
 
                 consecutive_detections = 0
-
                 continue
 
             # -------------------------------------------------
@@ -322,6 +324,21 @@ def wait_for_wake_word(model):
             ):
 
                 score = 0.0
+
+            # -------------------------------------------------
+            # LOW CONFIDENCE FILTER
+            # -------------------------------------------------
+
+            if score < LOW_CONFIDENCE_THRESHOLD:
+
+                if consecutive_detections > 0:
+
+                    print(
+                        "[WAKE] Confidence reset."
+                    )
+
+                consecutive_detections = 0
+                continue
 
             # -------------------------------------------------
             # DEBUG ONLY FOR MEANINGFUL SCORES
