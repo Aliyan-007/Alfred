@@ -5,41 +5,6 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 
-from tools.bluetooth import (
-    connect_bluetooth_device,
-    disconnect_bluetooth_device,
-    get_bluetooth_status,
-    list_bluetooth_devices,
-    toggle_bluetooth,
-)
-from tools.display import adjust_brightness, open_display_settings, set_brightness
-from tools.hardware import (
-    get_battery_information,
-    get_cpu_information,
-    get_current_datetime,
-    get_drive_information,
-    get_gpu_information,
-    get_memory_information,
-    get_running_applications,
-    get_storage_information,
-    get_storage_remaining,
-    get_system_information,
-)
-from tools.network import (
-    connect_to_wifi_network,
-    disconnect_wifi,
-    get_connected_wifi,
-    get_ip_information,
-    get_network_information,
-    get_network_interfaces,
-    get_network_status,
-    get_wifi_status,
-    list_wifi_networks,
-    ping_host,
-    toggle_airplane_mode,
-    toggle_wifi,
-)
-
 WAKE_WORD_MODEL = None
 
 
@@ -91,160 +56,8 @@ def handle_command(*args, **kwargs):
     return _lazy_import("tools.dispatcher", "handle_command")(*args, **kwargs)
 
 
-def handle_local_command(text: str):
-    """Compatibility wrapper: route text through the real local dispatcher."""
-    return handle_command(text)
-
-
 def ask_brain(*args, **kwargs):
     return _lazy_import("brain", "ask_brain")(*args, **kwargs)
-
-
-# =========================================================
-# MAIN-LEVEL WINDOWS FEATURE WRAPPERS
-# =========================================================
-
-__all__ = [
-    "initialize_runtime",
-    "process_command",
-    "main_loop",
-    "handle_local_command",
-    "get_wifi_status",
-    "list_wifi_networks",
-    "get_connected_wifi",
-    "connect_to_wifi_network",
-    "disconnect_wifi",
-    "toggle_wifi",
-    "toggle_airplane_mode",
-    "get_network_status",
-    "get_network_information",
-    "get_ip_information",
-    "get_bluetooth_status",
-    "list_bluetooth_devices",
-    "connect_bluetooth_device",
-    "disconnect_bluetooth_device",
-    "toggle_bluetooth",
-    "set_brightness",
-    "adjust_brightness",
-    "open_display_settings",
-    "get_system_information",
-    "get_cpu_information",
-    "get_memory_information",
-    "get_storage_information",
-    "get_storage_remaining",
-    "get_battery_information",
-    "get_gpu_information",
-    "get_running_applications",
-    "get_current_datetime",
-]
-
-
-def get_wifi_status():
-    return _lazy_import("tools.network", "get_wifi_status")()
-
-
-def list_wifi_networks():
-    return _lazy_import("tools.network", "list_wifi_networks")()
-
-
-def get_connected_wifi():
-    return _lazy_import("tools.network", "get_connected_wifi")()
-
-
-def connect_to_wifi_network(ssid: str, password: str | None = None):
-    return _lazy_import("tools.network", "connect_to_wifi_network")(ssid, password)
-
-
-def disconnect_wifi():
-    return _lazy_import("tools.network", "disconnect_wifi")()
-
-
-def toggle_wifi(enabled: bool):
-    return _lazy_import("tools.network", "toggle_wifi")(enabled)
-
-
-def toggle_airplane_mode(enabled: bool):
-    return _lazy_import("tools.network", "toggle_airplane_mode")(enabled)
-
-
-def get_network_status():
-    return _lazy_import("tools.network", "get_network_status")()
-
-
-def get_network_information():
-    return _lazy_import("tools.network", "get_network_information")()
-
-
-def get_ip_information():
-    return _lazy_import("tools.network", "get_ip_information")()
-
-
-def get_bluetooth_status():
-    return _lazy_import("tools.bluetooth", "get_bluetooth_status")()
-
-
-def list_bluetooth_devices():
-    return _lazy_import("tools.bluetooth", "list_bluetooth_devices")()
-
-
-def connect_bluetooth_device(device_name: str):
-    return _lazy_import("tools.bluetooth", "connect_bluetooth_device")(device_name)
-
-
-def disconnect_bluetooth_device(device_name: str):
-    return _lazy_import("tools.bluetooth", "disconnect_bluetooth_device")(device_name)
-
-
-def toggle_bluetooth(enabled: bool):
-    return _lazy_import("tools.bluetooth", "toggle_bluetooth")(enabled)
-
-
-def get_system_information():
-    return _lazy_import("tools.hardware", "get_system_information")()
-
-
-def get_cpu_information():
-    return _lazy_import("tools.hardware", "get_cpu_information")()
-
-
-def get_memory_information():
-    return _lazy_import("tools.hardware", "get_memory_information")()
-
-
-def get_storage_information():
-    return _lazy_import("tools.hardware", "get_storage_information")()
-
-
-def get_storage_remaining():
-    return _lazy_import("tools.hardware", "get_storage_remaining")()
-
-
-def get_battery_information():
-    return _lazy_import("tools.hardware", "get_battery_information")()
-
-
-def get_gpu_information():
-    return _lazy_import("tools.hardware", "get_gpu_information")()
-
-
-def get_running_applications():
-    return _lazy_import("tools.hardware", "get_running_applications")()
-
-
-def get_current_datetime():
-    return _lazy_import("tools.hardware", "get_current_datetime")()
-
-
-def get_network_interfaces():
-    return _lazy_import("tools.network", "get_network_interfaces")()
-
-
-def ping_host(host: str = "8.8.8.8"):
-    return _lazy_import("tools.network", "ping_host")(host)
-
-
-def open_display_settings():
-    return _lazy_import("tools.display", "open_display_settings")()
 
 
 def detect_assistant(*args, **kwargs):
@@ -410,15 +223,8 @@ def main_loop():
     while True:
         try:
             wait_for_wake_word(wake_model)
-
-            # confirm wake-word activation
-            safe_speak("Yes Sir.", "ALFRED")
-
-            # short pause so the user can speak naturally
-            time.sleep(0.25)
-
             process_command()
-            time.sleep(0.2)
+            time.sleep(1.0)
 
         except SystemExit:
             print("\nALFRED: Shutdown complete.")

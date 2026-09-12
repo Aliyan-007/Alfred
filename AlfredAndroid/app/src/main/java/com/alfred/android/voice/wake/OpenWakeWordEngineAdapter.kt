@@ -96,6 +96,20 @@ class OpenWakeWordEngineAdapter(
         }
 
         try {
+            val neededAssets = WakeWordAssetRequirements.findMissing(
+                context.assets.list("")?.toList().orEmpty()
+            )
+
+            if (neededAssets.isNotEmpty()) {
+                val missing = neededAssets.first()
+                val message =
+                    "Missing wake-word asset: $missing"
+
+                Log.e(TAG, message)
+                onError(message)
+                return
+            }
+
             if (!assetExists(MODEL_FILE)) {
                 val message =
                     "$MODEL_FILE is missing from app/src/main/assets"

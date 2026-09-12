@@ -15,17 +15,17 @@ CHUNK_SIZE = 1280
 MODEL_NAME = "alfred"
 
 # Wake-word confidence threshold.
-THRESHOLD = 0.55
+THRESHOLD = 0.70
 
 # Number of consecutive strong model predictions required.
-REQUIRED_DETECTIONS = 2
+REQUIRED_DETECTIONS = 3
 
 # Minimum microphone RMS level required before a wake
 # prediction can be accepted.
 #
 # This prevents very quiet background/noise from activating
 # the wake-word model.
-MIN_AUDIO_LEVEL = 0.015
+MIN_AUDIO_LEVEL = 0.025
 
 # Ignore the detector briefly after successful activation.
 WAKE_COOLDOWN = 1.0

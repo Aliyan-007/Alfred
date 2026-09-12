@@ -273,66 +273,52 @@ class VoiceAssistant(
                 .orEmpty()
 
         val britishVoices =
-            voices.filter {
-                it.locale.language ==
-                    Locale.UK.language &&
-                    it.locale.country ==
-                    Locale.UK.country
+            voices.map {
+                BritishVoiceCandidate(
+                    name = it.name,
+                    locale = it.locale,
+                    quality = it.quality,
+                    latency = it.latency,
+                    networkRequired = it.isNetworkConnectionRequired
+                )
             }
 
-        val maleHints =
-            listOf(
-                "male",
-                "alan",
-                "arthur",
-                "george",
-                "rjs",
-                "daniel"
-            )
-
         val selected =
-            britishVoices
-                .sortedWith(
-                    compareByDescending<
-                        android.speech.tts.Voice
-                    > { voice ->
-
-                        val name =
-                            voice.name
-                                .lowercase(
-                                    Locale.US
-                                )
-
-                        maleHints.count {
-                            hint ->
-                            hint in name
-                        }
-                    }
-                        .thenBy {
-                            it.isNetworkConnectionRequired
-                        }
-                        .thenByDescending {
-                            it.quality
-                        }
-                        .thenBy {
-                            it.latency
-                        }
-                )
-                .firstOrNull()
+            BritishVoiceSelection.pickBest(
+                britishVoices
+            )
 
         if (selected != null) {
-            tts.setVoice(
-                selected
-            )
+            val voice =
+                voices.firstOrNull {
+                    it.name == selected.name
+                }
 
+            if (voice != null) {
+                tts.setVoice(
+                    voice
+                )
+                LogHelper.info(
+                    "Selected British TTS voice: ${voice.name}"
+                )
+                return
+            }
+        }
+
+        if (voices.any {
+                it.locale.language == Locale.UK.language &&
+                    it.locale.country == Locale.UK.country
+            }) {
+            tts.setLanguage(
+                Locale.UK
+            )
             LogHelper.info(
-                "Selected British TTS voice: ${selected.name}"
+                "Using available en-GB language fallback"
             )
         } else {
             tts.setLanguage(
                 Locale.UK
             )
-
             LogHelper.info(
                 "No dedicated British voice found; using en-GB fallback"
             )
