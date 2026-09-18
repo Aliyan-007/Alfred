@@ -39,7 +39,8 @@ class VoiceAssistant(
     private val onListeningChanged: (Boolean) -> Unit,
     private val onResult: (String) -> Unit,
     private val onError: (String) -> Unit,
-    private val onWakeStateChanged: (Boolean) -> Unit = {}
+    private val onWakeStateChanged: (Boolean) -> Unit = {},
+    private val onTtsStateChanged: ((Boolean, Locale, String, Boolean) -> Unit)? = null
 ) : TextToSpeech.OnInitListener {
 
     private enum class ListeningMode {
@@ -53,7 +54,7 @@ class VoiceAssistant(
     private var textToSpeech: TextToSpeech? = null
 
     @Volatile
-    private var ttsReady = false
+    private var ttsInitialized = false
 
     @Volatile
     private var destroyed = false
@@ -64,8 +65,38 @@ class VoiceAssistant(
     @Volatile
     private var listeningMode = ListeningMode.IDLE
 
+    var ttsReady: Boolean
+        get() = ttsInitialized
+        private set(value) {
+            ttsInitialized = value
+        }
+
+    var requestedLocale: Locale = Locale.UK
+        private set
+
+    var selectedVoiceName: String = "unknown"
+        private set
+
+    var currentVoiceLocale: Locale = Locale.US
+        private set
+
+    var britishEnglishAvailable: Boolean = false
+        private set
+
+    var usingBritishFallback: Boolean = false
+        private set
+
+    val ttsDiagnostics: BritishVoiceDiagnostics
+        get() = BritishVoiceSelection.evaluate(
+            candidates = emptyList(),
+            requestedLocale = requestedLocale
+        )
+
     private val utteranceCallbacks =
         ConcurrentHashMap<String, () -> Unit>()
+
+    private val pendingSpeech =
+        ArrayDeque<Pair<String, (() -> Unit)?>>()
 
     private val mainHandler =
         Handler(
@@ -106,8 +137,22 @@ class VoiceAssistant(
         }
 
         ttsReady = true
+        requestedLocale = Locale.UK
 
         configureBritishMaleVoice()
+
+        LogHelper.info(
+            "TTS initialized; requested locale=${requestedLocale}; en-GB=${britishEnglishAvailable}; selectedVoice=${selectedVoiceName}; fallback=${usingBritishFallback}"
+        )
+
+        onTtsStateChanged?.invoke(
+            ttsReady,
+            currentVoiceLocale,
+            selectedVoiceName,
+            britishEnglishAvailable
+        )
+
+        flushPendingSpeech()
 
         textToSpeech?.setSpeechRate(
             0.96f
@@ -192,11 +237,9 @@ class VoiceAssistant(
         }
 
         if (!ttsReady || textToSpeech == null) {
-            /*
-             * Do not permanently block the conversation if TTS has
-             * not initialized yet.
-             */
-            onDone?.invoke()
+            pendingSpeech.addLast(
+                cleanText to onDone
+            )
             return
         }
 
@@ -231,6 +274,20 @@ class VoiceAssistant(
             )
 
             onDone?.invoke()
+        }
+    }
+
+    private fun flushPendingSpeech() {
+        if (!ttsReady || textToSpeech == null) {
+            return
+        }
+
+        while (pendingSpeech.isNotEmpty()) {
+            val (pendingText, pendingDone) = pendingSpeech.removeFirst()
+            speak(
+                pendingText,
+                pendingDone
+            )
         }
     }
 
@@ -283,10 +340,13 @@ class VoiceAssistant(
                 )
             }
 
-        val selected =
-            BritishVoiceSelection.pickBest(
-                britishVoices
+        val diagnostics =
+            BritishVoiceSelection.evaluate(
+                britishVoices,
+                requestedLocale = Locale.UK
             )
+
+        val selected = diagnostics.selectedVoice
 
         if (selected != null) {
             val voice =
@@ -298,27 +358,37 @@ class VoiceAssistant(
                 tts.setVoice(
                     voice
                 )
+                selectedVoiceName = voice.name
+                currentVoiceLocale = voice.locale
+                britishEnglishAvailable =
+                    voice.locale.language == Locale.UK.language &&
+                        voice.locale.country == Locale.UK.country
+                usingBritishFallback = diagnostics.isFallback
+                requestedLocale = Locale.UK
                 LogHelper.info(
-                    "Selected British TTS voice: ${voice.name}"
+                    "Selected British TTS voice: ${voice.name}; locale=${voice.locale}; fallback=${usingBritishFallback}"
                 )
                 return
             }
         }
 
-        if (voices.any {
-                it.locale.language == Locale.UK.language &&
-                    it.locale.country == Locale.UK.country
-            }) {
-            tts.setLanguage(
-                Locale.UK
-            )
+        val hasBritishLocale = diagnostics.exactBritishVoiceExists
+
+        currentVoiceLocale = Locale.UK
+        britishEnglishAvailable = hasBritishLocale
+        usingBritishFallback = true
+        requestedLocale = Locale.UK
+        selectedVoiceName = "default"
+
+        tts.setLanguage(
+            Locale.UK
+        )
+
+        if (hasBritishLocale) {
             LogHelper.info(
                 "Using available en-GB language fallback"
             )
         } else {
-            tts.setLanguage(
-                Locale.UK
-            )
             LogHelper.info(
                 "No dedicated British voice found; using en-GB fallback"
             )
@@ -376,6 +446,10 @@ class VoiceAssistant(
             return
         }
 
+        if (listeningMode == ListeningMode.WAKE_WORD && wakeWordEngine.isRunning) {
+            return
+        }
+
         mainHandler.post {
             if (destroyed) {
                 return@post
@@ -388,10 +462,6 @@ class VoiceAssistant(
 
             isListening = false
 
-            /*
-             * Wake detection is active, but we don't call this
-             * "command listening".
-             */
             onListeningChanged(
                 false
             )
@@ -431,12 +501,18 @@ class VoiceAssistant(
             return
         }
 
+        if (listeningMode == ListeningMode.COMMAND && speechRecognizer != null) {
+            return
+        }
+
         mainHandler.post {
             if (destroyed) {
                 return@post
             }
 
             wakeWordEngine.stop()
+
+            stopRecognizerOnly()
 
             onWakeStateChanged(
                 false

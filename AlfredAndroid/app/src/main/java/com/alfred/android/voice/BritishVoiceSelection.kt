@@ -10,6 +10,15 @@ data class BritishVoiceCandidate(
     val networkRequired: Boolean
 )
 
+data class BritishVoiceDiagnostics(
+    val requestedLocale: Locale = Locale.UK,
+    val exactBritishVoiceExists: Boolean = false,
+    val selectedVoiceName: String? = null,
+    val selectedVoiceLocale: Locale = Locale.UK,
+    val isFallback: Boolean = false,
+    val selectedVoice: BritishVoiceCandidate? = null
+)
+
 object BritishVoiceSelection {
     private val britishLocale = Locale.UK
 
@@ -32,5 +41,27 @@ object BritishVoiceSelection {
                     .thenBy { it.networkRequired }
             )
             .firstOrNull()
+    }
+
+    fun evaluate(
+        candidates: List<BritishVoiceCandidate>,
+        requestedLocale: Locale = Locale.UK
+    ): BritishVoiceDiagnostics {
+        val exactBritishVoiceExists = candidates.any {
+            it.locale.language == requestedLocale.language &&
+                it.locale.country == requestedLocale.country
+        }
+        val selected = pickBest(candidates)
+        val selectedLocale = selected?.locale ?: requestedLocale
+        val isFallback = selected == null || selected.locale.language != requestedLocale.language || selected.locale.country != requestedLocale.country
+
+        return BritishVoiceDiagnostics(
+            requestedLocale = requestedLocale,
+            exactBritishVoiceExists = exactBritishVoiceExists,
+            selectedVoiceName = selected?.name,
+            selectedVoiceLocale = selectedLocale,
+            isFallback = isFallback,
+            selectedVoice = selected
+        )
     }
 }

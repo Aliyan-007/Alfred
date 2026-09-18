@@ -78,6 +78,15 @@ class OpenWakeWordEngineAdapter(
     @Volatile
     private var released = false
 
+    var wakeState: String = "STOPPED"
+        private set
+
+    val modelName: String
+        get() = MODEL_FILE
+
+    val threshold: Float
+        get() = THRESHOLD
+
     override val isRunning: Boolean
         get() = running
 
@@ -105,6 +114,8 @@ class OpenWakeWordEngineAdapter(
                 val message =
                     "Missing wake-word asset: $missing"
 
+                wakeState = "ERROR"
+                Log.e(TAG, "Wake engine initialized=false; model=$MODEL_FILE; threshold=$THRESHOLD; missingAsset=$missing")
                 Log.e(TAG, message)
                 onError(message)
                 return
@@ -114,6 +125,8 @@ class OpenWakeWordEngineAdapter(
                 val message =
                     "$MODEL_FILE is missing from app/src/main/assets"
 
+                wakeState = "ERROR"
+                Log.e(TAG, "Wake engine initialized=false; model=$MODEL_FILE; threshold=$THRESHOLD; missingAsset=$MODEL_FILE")
                 Log.e(TAG, message)
                 onError(message)
                 return
@@ -147,6 +160,12 @@ class OpenWakeWordEngineAdapter(
             detectionJob?.cancel()
 
             running = true
+            wakeState = "READY"
+
+            Log.i(
+                TAG,
+                "Wake engine initialized; model=$MODEL_FILE; threshold=$THRESHOLD; state=$wakeState"
+            )
 
             detectionJob = scope?.launch {
                 engine.detections
@@ -177,10 +196,11 @@ class OpenWakeWordEngineAdapter(
 
             Log.i(
                 TAG,
-                "OpenWakeWord engine started"
+                "OpenWakeWord engine started; model=$MODEL_FILE; threshold=$THRESHOLD"
             )
         } catch (exception: Exception) {
             running = false
+            wakeState = "ERROR"
 
             detectionJob?.cancel()
             detectionJob = null
@@ -211,10 +231,11 @@ class OpenWakeWordEngineAdapter(
 
         Log.i(
             TAG,
-            "Stopping OpenWakeWord engine"
+            "Stopping OpenWakeWord engine; model=$MODEL_FILE"
         )
 
         running = false
+        wakeState = "STOPPED"
 
         detectionJob?.cancel()
         detectionJob = null
@@ -231,7 +252,7 @@ class OpenWakeWordEngineAdapter(
 
         Log.i(
             TAG,
-            "OpenWakeWord engine stopped"
+            "OpenWakeWord engine stopped; model=$MODEL_FILE"
         )
     }
 
@@ -331,9 +352,10 @@ class OpenWakeWordEngineAdapter(
             return
         }
 
+        wakeState = "DETECTED"
         Log.i(
             TAG,
-            "Wake word detected: $detection"
+            "Wake word detected: $detection; model=$MODEL_FILE; threshold=$THRESHOLD"
         )
 
         /*

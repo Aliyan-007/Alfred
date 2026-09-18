@@ -336,6 +336,31 @@ private fun LiveChannelPanel(state: DashboardUiState, viewModel: DashboardViewMo
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    "Wake: ${state.wakeEngineState}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state.wakeEngineState == "ERROR") MaterialTheme.colorScheme.error else AlfredSecondary,
+                )
+                Text(
+                    "TTS: ${if (state.ttsReady) "READY" else "ERROR"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state.ttsReady) AlfredPrimary else MaterialTheme.colorScheme.error,
+                )
+                Text(
+                    "Mic: ${if (state.microphonePermissionGranted) "GRANTED" else "DENIED"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (state.microphonePermissionGranted) AlfredPrimary else MaterialTheme.colorScheme.error,
+                )
+            }
+            Text(
+                "Locale: ${state.ttsLocale} • Voice: ${state.selectedVoiceName} • en-GB: ${if (state.britishEnglishAvailable) "AVAILABLE" else "UNAVAILABLE"}",
+                style = MaterialTheme.typography.labelSmall,
+                color = AlfredOnSurfaceMuted,
+            )
             FilledTonalButton(
                 onClick = { viewModel.toggleVoiceListening() },
                 enabled = state.foregroundServiceRunning,

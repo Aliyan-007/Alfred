@@ -375,6 +375,11 @@ class DashboardViewModel(
                 context
             )
 
+        val microphonePermissionGranted =
+            context.checkSelfPermission(
+                android.Manifest.permission.RECORD_AUDIO
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
         return DashboardUiState(
 
             connectionState =
@@ -438,7 +443,25 @@ class DashboardViewModel(
                 lastVoiceText,
 
             voiceStatus =
-                voiceStatus
+                voiceStatus,
+
+            wakeEngineState =
+                AlfredAgentService.wakeEngineState.value,
+
+            ttsReady =
+                AlfredAgentService.ttsReady.value,
+
+            ttsLocale =
+                AlfredAgentService.ttsLocale.value,
+
+            selectedVoiceName =
+                AlfredAgentService.selectedVoiceName.value,
+
+            britishEnglishAvailable =
+                AlfredAgentService.britishEnglishAvailable.value,
+
+            microphonePermissionGranted =
+                microphonePermissionGranted
         )
     }
 

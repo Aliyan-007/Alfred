@@ -23,7 +23,13 @@ val capabilities: List<CapabilityStatus> = emptyList(),
 val permissions: List<PermissionStatus> = emptyList(),
 val voiceListening: Boolean = false,
 val lastVoiceText: String = "",
-val voiceStatus: String = "Ready"
+val voiceStatus: String = "Ready",
+val wakeEngineState: String = "STOPPED",
+val ttsReady: Boolean = false,
+val ttsLocale: String = "unknown",
+val selectedVoiceName: String = "unknown",
+val britishEnglishAvailable: Boolean = false,
+val microphonePermissionGranted: Boolean = false
 )
 
 data class CapabilityStatus(

@@ -454,8 +454,22 @@ class AlfredAgentService : Service() {
 
                             updateVoiceNotification()
                         }
+                    },
+                    onTtsStateChanged = { ready, locale, selectedVoice, enGbAvailable ->
+                        mainHandler.post {
+                            _ttsReady.value = ready
+                            _ttsLocale.value = locale.toLanguageTag()
+                            _selectedVoiceName.value = selectedVoice
+                            _britishEnglishAvailable.value = enGbAvailable
+                        }
                     }
                 )
+
+            _ttsReady.value = voiceAssistant?.ttsReady == true
+            _ttsLocale.value = voiceAssistant?.currentVoiceLocale?.toLanguageTag() ?: "unknown"
+            _selectedVoiceName.value = voiceAssistant?.selectedVoiceName ?: "unknown"
+            _britishEnglishAvailable.value = voiceAssistant?.britishEnglishAvailable == true
+            _wakeEngineState.value = wakeWordEngine?.let { if (it.isRunning) "READY" else "STOPPED" } ?: "STOPPED"
         }
     }
 
@@ -493,6 +507,7 @@ class AlfredAgentService : Service() {
 
         _voiceStatus.value =
             "Starting wake-word engine..."
+        _wakeEngineState.value = "STARTING"
 
         updateVoiceNotification()
 
@@ -543,16 +558,8 @@ class AlfredAgentService : Service() {
 
         updateVoiceNotification()
 
-        /*
-         * WakeWordEngine already stops itself after detection.
-         * Calling stop again is harmless and provides an extra
-         * safety barrier.
-         */
         wakeWordEngine?.stop()
 
-        /*
-         * ALFRED acknowledges the wake word first.
-         */
         mainHandler.post {
 
             voiceAssistant?.speak(
@@ -624,31 +631,7 @@ class AlfredAgentService : Service() {
                             return@speak
                         }
 
-                        /*
-                         * Command completed.
-                         *
-                         * ALFRED now returns to command listening
-                         * instead of immediately returning to the
-                         * wake-word detector.
-                         *
-                         * This creates a natural conversation:
-                         *
-                         * Alfred
-                         *   -> Yes, Sir
-                         *   -> command
-                         *   -> answer
-                         *   -> next command
-                         *   -> ...
-                         */
-                        _voiceStatus.value =
-                            "Listening for command"
-
-                        updateVoiceNotification()
-
-                        voiceAssistant
-                            ?.startCommandListening()
-
-                        armConversationTimeout()
+                        endConversationAndResumeWake()
                     }
                 }
 
@@ -687,15 +670,7 @@ class AlfredAgentService : Service() {
                             return@speak
                         }
 
-                        _voiceStatus.value =
-                            "Listening for command"
-
-                        updateVoiceNotification()
-
-                        voiceAssistant
-                            ?.startCommandListening()
-
-                        armConversationTimeout()
+                        endConversationAndResumeWake()
                     }
                 }
             }
@@ -730,10 +705,6 @@ class AlfredAgentService : Service() {
 
         updateVoiceNotification()
 
-        /*
-         * If we are inside a conversation, give the user a chance
-         * to speak again instead of getting stuck.
-         */
         if (conversationActive) {
 
             voiceAssistant?.speak(
@@ -747,29 +718,27 @@ class AlfredAgentService : Service() {
                     return@speak
                 }
 
-                _voiceStatus.value =
-                    "Listening for command"
-
-                updateVoiceNotification()
-
-                voiceAssistant
-                    ?.startCommandListening()
-
-                armConversationTimeout()
+                endConversationAndResumeWake()
             }
 
         } else {
-
-            /*
-             * Wake-engine error while waiting for Alfred.
-             *
-             * We leave the service alive but clearly report the
-             * problem instead of pretending wake detection is active.
-             */
             conversationActive =
                 false
 
             cancelConversationTimeout()
+
+            voiceAssistant
+                ?.stopListening()
+
+            mainHandler.postDelayed(
+                {
+                    if (voiceModeActive) {
+                        voiceAssistant
+                            ?.startWakeWordListening()
+                    }
+                },
+                WAKE_RESTART_DELAY_MS
+            )
         }
     }
 
@@ -858,13 +827,8 @@ class AlfredAgentService : Service() {
             voiceAssistant
                 ?.stopListening()
 
-            /*
-             * Small delay prevents the microphone transition from
-             * immediately colliding with SpeechRecognizer cleanup.
-             */
             mainHandler.postDelayed(
                 {
-
                     if (
                         !voiceModeActive ||
                         conversationActive
@@ -953,6 +917,11 @@ class AlfredAgentService : Service() {
 
         _voiceStatus.value =
             "Stopped"
+        _wakeEngineState.value = "STOPPED"
+        _ttsReady.value = false
+        _ttsLocale.value = "unknown"
+        _selectedVoiceName.value = "unknown"
+        _britishEnglishAvailable.value = false
     }
 
     // ---------------------------------------------------------------------
@@ -1008,6 +977,11 @@ class AlfredAgentService : Service() {
 
         _voiceStatus.value =
             "Stopped"
+        _wakeEngineState.value = "STOPPED"
+        _ttsReady.value = false
+        _ttsLocale.value = "unknown"
+        _selectedVoiceName.value = "unknown"
+        _britishEnglishAvailable.value = false
 
         mainHandler.removeCallbacksAndMessages(
             null
@@ -1301,6 +1275,41 @@ class AlfredAgentService : Service() {
         val voiceStatus:
             StateFlow<String> =
             _voiceStatus.asStateFlow()
+
+        private val _wakeEngineState =
+            MutableStateFlow("STOPPED")
+
+        val wakeEngineState:
+            StateFlow<String> =
+            _wakeEngineState.asStateFlow()
+
+        private val _ttsReady =
+            MutableStateFlow(false)
+
+        val ttsReady:
+            StateFlow<Boolean> =
+            _ttsReady.asStateFlow()
+
+        private val _ttsLocale =
+            MutableStateFlow("unknown")
+
+        val ttsLocale:
+            StateFlow<String> =
+            _ttsLocale.asStateFlow()
+
+        private val _selectedVoiceName =
+            MutableStateFlow("unknown")
+
+        val selectedVoiceName:
+            StateFlow<String> =
+            _selectedVoiceName.asStateFlow()
+
+        private val _britishEnglishAvailable =
+            MutableStateFlow(false)
+
+        val britishEnglishAvailable:
+            StateFlow<Boolean> =
+            _britishEnglishAvailable.asStateFlow()
 
         private val _serviceStatus =
             MutableStateFlow("Stopped")
