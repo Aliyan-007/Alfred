@@ -3,6 +3,15 @@ import time
 import numpy as np
 import sounddevice as sd
 from openwakeword.model import Model
+from voice.wake_word import (
+    CHUNK_SIZE,
+    MIN_AUDIO_LEVEL,
+    REQUIRED_DETECTIONS,
+    SAMPLE_RATE,
+    THRESHOLD,
+    _get_audio_level,
+    find_microphone,
+)
 
 
 # --------------------------------------------------
@@ -11,11 +20,6 @@ from openwakeword.model import Model
 
 MODEL_PATH = r"D:\alfred\alfred.onnx"
 
-DEVICE_INDEX = 1
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 1280
-
-THRESHOLD = 0.40
 COOLDOWN = 2.0
 
 
@@ -39,7 +43,8 @@ print()
 # --------------------------------------------------
 
 print("Starting microphone...")
-print(f"Device index : {DEVICE_INDEX}")
+device_index = find_microphone()
+print(f"Device index : {device_index}")
 print(f"Sample rate  : {SAMPLE_RATE}")
 print(f"Chunk size   : {CHUNK_SIZE}")
 print()
@@ -50,6 +55,7 @@ print()
 
 
 last_detection = 0.0
+consecutive_detections = 0
 
 
 # --------------------------------------------------
@@ -57,11 +63,10 @@ last_detection = 0.0
 # --------------------------------------------------
 
 try:
-
     with sd.RawInputStream(
         samplerate=SAMPLE_RATE,
         blocksize=CHUNK_SIZE,
-        device=DEVICE_INDEX,
+        device=device_index,
         dtype="int16",
         channels=1,
     ) as stream:
@@ -161,11 +166,16 @@ try:
             # WAKE WORD DETECTION
             # --------------------------------------
 
+            if _get_audio_level(pcm) < MIN_AUDIO_LEVEL:
+                consecutive_detections = 0
+                continue
+
             if score >= THRESHOLD:
+                consecutive_detections += 1
 
                 now = time.monotonic()
 
-                if now - last_detection >= COOLDOWN:
+                if consecutive_detections >= REQUIRED_DETECTIONS and now - last_detection >= COOLDOWN:
 
                     print(
                         f"\n\n"
@@ -177,6 +187,9 @@ try:
                     )
 
                     last_detection = now
+                    consecutive_detections = 0
+            else:
+                consecutive_detections = 0
 
 
 except KeyboardInterrupt:

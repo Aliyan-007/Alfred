@@ -1,19 +1,18 @@
 import sounddevice as sd
 import numpy as np
 
-DEVICE_INDEX = 1
-SAMPLE_RATE = 16000
-CHUNK_SIZE = 1280
+from voice.wake_word import CHUNK_SIZE, SAMPLE_RATE, find_microphone
 
 print("Starting microphone test...")
 print("Speak into your microphone.")
 print("Press CTRL+C to stop.\n")
 
 try:
+    device_index = find_microphone()
     with sd.RawInputStream(
         samplerate=SAMPLE_RATE,
         blocksize=CHUNK_SIZE,
-        device=DEVICE_INDEX,
+        device=device_index,
         dtype="int16",
         channels=1,
     ) as stream:

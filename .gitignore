@@ -26,7 +26,4 @@ wakeword_output/
 *.mp3
 
 livekit-wakeword/
-
-BRAIN.md
-
-BRAIN.md
+.md
